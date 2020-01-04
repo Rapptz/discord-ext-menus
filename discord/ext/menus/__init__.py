@@ -565,10 +565,14 @@ class Menu(metaclass=_MenuMeta):
             The reaction event that triggered this update.
         """
         button = self.buttons[str(payload.emoji)]
+        if not self._running:
+            return
+
         try:
             if button.lock:
                 async with self._lock:
-                    await button(self, payload)
+                    if self._running:
+                        await button(self, payload)
             else:
                 await button(self, payload)
         except Exception:
