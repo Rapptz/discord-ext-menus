@@ -294,6 +294,7 @@ class Menu(metaclass=_MenuMeta):
         self._author_id = None
         self._buttons = self.__class__.__menu_buttons__.copy()
         self._lock = asyncio.Lock()
+        self._event = asyncio.Event()
 
     @discord.utils.cached_property
     def buttons(self):
@@ -536,6 +537,7 @@ class Menu(metaclass=_MenuMeta):
         except asyncio.TimeoutError:
             pass
         finally:
+            self._event.set()
             try:
                 await self.finalize()
             except Exception:
@@ -580,7 +582,7 @@ class Menu(metaclass=_MenuMeta):
             import traceback
             traceback.print_exc()
 
-    async def start(self, ctx, *, channel=None):
+    async def start(self, ctx, *, channel=None, wait=False):
         """|coro|
 
         Starts the interactive menu session.
@@ -592,6 +594,9 @@ class Menu(metaclass=_MenuMeta):
         channel: :class:`discord.abc.Messageable`
             The messageable to send the message to. If not given
             then it defaults to the channel in the context.
+        wait: :class:`bool`
+            Whether to wait until the menu is completed before
+            returning back to the caller.
 
         Raises
         -------
@@ -614,6 +619,7 @@ class Menu(metaclass=_MenuMeta):
         permissions = channel.permissions_for(me)
         self.__me = discord.Object(id=me.id)
         self._verify_permissions(ctx, channel, permissions)
+        self._event.clear()
         self.message = msg = await self.send_initial_message(ctx, channel)
 
         if self.should_add_reactions():
@@ -625,6 +631,9 @@ class Menu(metaclass=_MenuMeta):
 
             for emoji in self.buttons:
                 await msg.add_reaction(emoji)
+
+        if wait:
+            await self._event.wait()
 
     async def finalize(self):
         """|coro|
