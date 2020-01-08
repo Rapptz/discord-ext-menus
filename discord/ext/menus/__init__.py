@@ -543,18 +543,27 @@ class Menu(metaclass=_MenuMeta):
             except Exception:
                 pass
 
-            if self.delete_message_after:
-                return await self.message.delete()
+            # Can't do any requests if the bot is closed
+            if self.bot.is_closed():
+                return
 
-            if self.clear_reactions_after:
-                if self._can_remove_reactions:
-                    return await self.message.clear_reactions()
+            # Wrap it in another block anyway just to ensure
+            # nothing leaks out during clean-up
+            try:
+                if self.delete_message_after:
+                    return await self.message.delete()
 
-                for button_emoji in self.buttons:
-                    try:
-                        await self.message.remove_reaction(button_emoji, self.__me)
-                    except discord.HTTPException:
-                        continue
+                if self.clear_reactions_after:
+                    if self._can_remove_reactions:
+                        return await self.message.clear_reactions()
+
+                    for button_emoji in self.buttons:
+                        try:
+                            await self.message.remove_reaction(button_emoji, self.__me)
+                        except discord.HTTPException:
+                            continue
+            except Exception:
+                pass
 
     async def update(self, payload):
         """|coro|
