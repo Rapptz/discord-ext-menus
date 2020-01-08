@@ -1088,8 +1088,8 @@ class AsyncIteratorPageSource(PageSource):
         if page_number < 0:
             raise IndexError('Negative page number.')
 
-        if not self._exhausted and len(self._cache) < page_number:
-            await self._iterate(page_number - len(self._cache))
+        if not self._exhausted and len(self._cache) <= page_number:
+            await self._iterate((page_number + 1) - len(self._cache))
         return self._cache[page_number]
 
     async def _get_page_range(self, page_number):
