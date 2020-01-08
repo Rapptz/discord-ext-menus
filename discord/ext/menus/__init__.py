@@ -765,11 +765,6 @@ class PageSource:
 
         An abstract method to format the page.
 
-        This must return a dictionary representing the keyword-arguments
-        that are used in both :meth:`discord.Message.edit` and
-        :meth:`discord.abc.Messageable.send`. The two of interest are
-        ``embed`` and ``content``.
-
         This method must return one of the following types.
 
         If this method returns a ``str`` then it is interpreted as returning
