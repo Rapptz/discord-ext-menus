@@ -834,6 +834,7 @@ class MenuPages(Menu):
         self._source = source
         self.current_page = 0
         if self.message is not None:
+            await source._prepare_once()
             await self.show_page(0)
 
     def should_add_reactions(self):
