@@ -876,9 +876,9 @@ class MenuPages(Menu):
         kwargs = await self._get_kwargs_from_page(page)
         return await channel.send(**kwargs)
 
-    async def start(self, ctx, *, channel=None):
+    async def start(self, ctx, *, channel=None, wait=False):
         await self._source._prepare_once()
-        await super().start(ctx, channel=channel)
+        await super().start(ctx, channel=channel, wait=wait)
 
     async def show_checked_page(self, page_number):
         max_pages = self._source.get_max_pages()
