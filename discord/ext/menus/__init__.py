@@ -112,7 +112,8 @@ class Button:
     Attributes
     ------------
     emoji: :class:`str`
-        The emoji to use as the button.
+        The emoji to use as the button. Note that this field is coerced
+        into a string to support classes such as :class:`discord.PartialEmoji`.
     action
         A coroutine that is called when the button is pressed.
     skip_if: Optional[Callable[[:class:`Menu`], :class:`bool`]]
@@ -131,7 +132,7 @@ class Button:
     __slots__ = ('emoji', '_action', '_skip_if', 'position', 'lock')
 
     def __init__(self, emoji, action, *, skip_if=None, position=None, lock=True):
-        self.emoji = emoji
+        self.emoji = str(emoji)
         self.action = action
         self.skip_if = skip_if
         self.position = position or Position(0)
