@@ -49,6 +49,43 @@ async def menu_example(ctx):
 
 If an error happens then an exception of type `menus.MenuError` is raised.
 
+This second example shows a confirmation menu and how we can compose it and use it later:
+
+```py
+from discord.ext import menus
+
+class Confirm(menus.Menu):
+    def __init__(self, msg):
+        super().__init__(delete_message_after=True)
+        self.msg = msg
+        self.result = None
+
+    async def send_initial_message(self, ctx, channel):
+        return await channel.send(self.msg)
+
+    @menus.button('\N{WHITE HEAVY CHECKMARK}')
+    async def do_confirm(self, payload):
+        self.result = True
+
+    @menus.button('\N{CROSS MARK}')
+    async def do_deny(self, payload):
+        self.result = False
+
+    async def prompt(self, ctx):
+        await self.start(ctx, wait=True)
+        return self.result
+```
+
+Then when it comes time to use it we can do it like so:
+
+```py
+@bot.command()
+async def delete_things(ctx):
+    confirm = await Confirm('Delete everything?').prompt(ctx)
+    if confirm:
+        await ctx.send('deleted...')
+```
+
 ### Pagination
 
 The meat of the library is the `Menu` class but a `MenuPages` class is provided for the common use case of actually making a pagination session.
