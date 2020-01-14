@@ -223,7 +223,9 @@ def button(emoji, **kwargs):
         The emoji to use for the button.
     """
     def decorator(func):
-        return Button(emoji, func, **kwargs)
+        func.__menu_button__ = emoji
+        func.__menu_button_kwargs__ = kwargs
+        return func
     return decorator
 
 class _MenuMeta(type):
@@ -233,7 +235,7 @@ class _MenuMeta(type):
         return OrderedDict()
 
     def __new__(cls, name, bases, attrs, **kwargs):
-        buttons = OrderedDict()
+        buttons = []
         new_cls = super().__new__(cls, name, bases, attrs)
 
         inherit_buttons = kwargs.pop('inherit_buttons', True)
@@ -241,15 +243,30 @@ class _MenuMeta(type):
             # walk MRO to get all buttons even in subclasses
             for base in reversed(new_cls.__mro__):
                 for elem, value in base.__dict__.items():
-                    if isinstance(value, Button):
-                        buttons[value.emoji] = value
+                    try:
+                        value.__menu_button__
+                    except AttributeError:
+                        continue
+                    else:
+                        buttons.append(value)
         else:
             for elem, value in attrs.items():
-                if isinstance(value, Button):
-                    buttons[value.emoji] = value
+                try:
+                    value.__menu_button__
+                except AttributeError:
+                    continue
+                else:
+                    buttons.append(value)
 
         new_cls.__menu_buttons__ = buttons
         return new_cls
+
+    def get_buttons(cls):
+        buttons = OrderedDict()
+        for func in cls.__menu_buttons__:
+            emoji = func.__menu_button__
+            buttons[emoji] = Button(emoji, func, **func.__menu_button_kwargs__)
+        return buttons
 
 class Menu(metaclass=_MenuMeta):
     """An interface that allows handling menus by using reactions as buttons.
@@ -293,7 +310,7 @@ class Menu(metaclass=_MenuMeta):
         self.ctx = None
         self.bot = None
         self._author_id = None
-        self._buttons = self.__class__.__menu_buttons__.copy()
+        self._buttons = self.__class__.get_buttons()
         self._lock = asyncio.Lock()
         self._event = asyncio.Event()
 
