@@ -56,7 +56,7 @@ from discord.ext import menus
 
 class Confirm(menus.Menu):
     def __init__(self, msg):
-        super().__init__(delete_message_after=True)
+        super().__init__(timeout=30.0, delete_message_after=True)
         self.msg = msg
         self.result = None
 
@@ -66,10 +66,12 @@ class Confirm(menus.Menu):
     @menus.button('\N{WHITE HEAVY CHECKMARK}')
     async def do_confirm(self, payload):
         self.result = True
+        self.stop()
 
     @menus.button('\N{CROSS MARK}')
     async def do_deny(self, payload):
         self.result = False
+        self.stop()
 
     async def prompt(self, ctx):
         await self.start(ctx, wait=True)
