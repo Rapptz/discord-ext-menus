@@ -654,13 +654,14 @@ class Menu(metaclass=_MenuMeta):
             if self.__task is not None:
                 self.__task.cancel()
 
+            self._running = True
             self.__task = bot.loop.create_task(self._internal_loop())
 
             for emoji in self.buttons:
                 await msg.add_reaction(emoji)
 
-        if wait:
-            await self._event.wait()
+            if wait:
+                await self._event.wait()
 
     async def finalize(self):
         """|coro|
