@@ -63,7 +63,7 @@ class Confirm(menus.Menu):
     async def send_initial_message(self, ctx, channel):
         return await channel.send(self.msg)
 
-    @menus.button('\N{WHITE HEAVY CHECKMARK}')
+    @menus.button('\N{WHITE HEAVY CHECK MARK}')
     async def do_confirm(self, payload):
         self.result = True
         self.stop()
