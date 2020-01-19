@@ -525,6 +525,8 @@ class Menu(metaclass=_MenuMeta):
     async def _internal_loop(self):
         try:
             loop = self.bot.loop
+            # Ensure the name exists for the cancellation handling
+            tasks = []
             while self._running:
                 tasks = [
                     asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
@@ -556,6 +558,11 @@ class Menu(metaclass=_MenuMeta):
             pass
         finally:
             self._event.set()
+
+            # Cancel any outstanding tasks (if any)
+            for task in tasks:
+                task.cancel()
+
             try:
                 await self.finalize()
             except Exception:
