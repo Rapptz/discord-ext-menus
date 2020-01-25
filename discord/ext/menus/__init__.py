@@ -86,7 +86,7 @@ class Position:
         return not r
 
     def __repr__(self):
-        return f'<{self.__class__.__name__}: {self.number}>'
+        return '<{0.__class__.__name__}: {0.number}>'.format(self)
 
 class Last(Position):
     __slots__ = ()
@@ -864,7 +864,7 @@ class MenuPages(Menu):
         """
 
         if not isinstance(source, PageSource):
-            raise TypeError(f'Expected {PageSource!r} not {source.__class__!r}.')
+            raise TypeError('Expected {0!r} not {1.__class__!r}.'.format(PageSource, source))
 
         self._source = source
         self.current_page = 0
