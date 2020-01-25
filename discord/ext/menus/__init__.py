@@ -636,6 +636,8 @@ class Menu(metaclass=_MenuMeta):
         -------
         MenuError
             An error happened when verifying permissions.
+        discord.HTTPException
+            Adding a reaction failed.
         """
 
         # Clear the buttons cache and re-compute if possible.
