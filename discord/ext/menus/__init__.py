@@ -285,7 +285,7 @@ class _MenuMeta(type):
         return buttons
 
 class Menu(metaclass=_MenuMeta):
-    """An interface that allows handling menus by using reactions as buttons.
+    r"""An interface that allows handling menus by using reactions as buttons.
 
     Buttons should be marked with the :func:`button` decorator. Please note that
     this expects the methods to have a single parameter, the ``payload``. This
@@ -312,9 +312,13 @@ class Menu(metaclass=_MenuMeta):
         been started yet.
     message: Optional[:class:`discord.Message`]
         The message that has been sent for handling the menu. This is the returned
-        message of :meth:`send_initial_message`.
+        message of :meth:`send_initial_message`. You can set it in order to avoid
+        calling :meth:`send_initial_message`\, if for example you have a pre-existing
+        message you want to attach a menu to.
     """
-    def __init__(self, *, timeout=180.0, delete_message_after=False, clear_reactions_after=False, check_embeds=False):
+    def __init__(self, *, timeout=180.0, delete_message_after=False,
+                          clear_reactions_after=False, check_embeds=False, message=None):
+
         self.timeout = timeout
         self.delete_message_after = delete_message_after
         self.clear_reactions_after = clear_reactions_after
@@ -322,7 +326,7 @@ class Menu(metaclass=_MenuMeta):
         self._can_remove_reactions = False
         self.__task = None
         self._running = True
-        self.message = None
+        self.message = message
         self.ctx = None
         self.bot = None
         self._author_id = None
