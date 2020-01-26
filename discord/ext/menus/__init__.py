@@ -30,6 +30,7 @@ import discord
 import itertools
 import inspect
 import bisect
+import re
 from collections import OrderedDict, namedtuple
 
 # Needed for the setup.py script
@@ -98,6 +99,21 @@ class First(Position):
     def __init__(self, number=0):
         super().__init__(number, bucket=0)
 
+_custom_emoji = re.compile(r'<?(?P<animated>a)?:?(?P<name>[A-Za-z0-9\_]+):(?P<id>[0-9]{13,21})>?')
+
+def _cast_emoji(obj, *, _custom_emoji=_custom_emoji):
+    if isinstance(obj, discord.PartialEmoji):
+        return obj
+
+    obj = str(obj)
+    match = _custom_emoji.match(obj)
+    if match is not None:
+        groups = match.groupdict()
+        animated = bool(groups['animated'])
+        emoji_id = int(groups['id'])
+        name = groups['name']
+        return discord.PartialEmoji(name=name, animated=animated, id=emoji_id)
+    return discord.PartialEmoji(name=obj, id=None, animated=False)
 
 class Button:
     """Represents a reaction-style button for the :class:`Menu`.
@@ -111,9 +127,9 @@ class Button:
 
     Attributes
     ------------
-    emoji: :class:`str`
-        The emoji to use as the button. Note that this field is coerced
-        into a string to support classes such as :class:`discord.PartialEmoji`.
+    emoji: :class:`discord.PartialEmoji`
+        The emoji to use as the button. Note that passing a string will
+        transform it into a :class:`discord.PartialEmoji`.
     action
         A coroutine that is called when the button is pressed.
     skip_if: Optional[Callable[[:class:`Menu`], :class:`bool`]]
@@ -132,7 +148,7 @@ class Button:
     __slots__ = ('emoji', '_action', '_skip_if', 'position', 'lock')
 
     def __init__(self, emoji, action, *, skip_if=None, position=None, lock=True):
-        self.emoji = str(emoji)
+        self.emoji = _cast_emoji(emoji)
         self.action = action
         self.skip_if = skip_if
         self.position = position or Position(0)
@@ -187,7 +203,7 @@ class Button:
         return self._action(menu, payload)
 
     def __str__(self):
-        return self.emoji
+        return str(self.emoji)
 
     def is_valid(self, menu):
         return not self.skip_if(menu)
@@ -219,11 +235,11 @@ def button(emoji, **kwargs):
 
     Parameters
     ------------
-    emoji: :class:`str`
+    emoji: Union[:class:`str`, :class:`discord.PartialEmoji`]
         The emoji to use for the button.
     """
     def decorator(func):
-        func.__menu_button__ = emoji
+        func.__menu_button__ = _cast_emoji(emoji)
         func.__menu_button_kwargs__ = kwargs
         return func
     return decorator
@@ -410,7 +426,11 @@ class Menu(metaclass=_MenuMeta):
             Removing the reaction failed.
         """
 
-        emoji = str(emoji)
+        if isinstance(emoji, Button):
+            emoji = emoji.emoji
+        else:
+            emoji = _cast_emoji(emoji)
+
         self._buttons.pop(emoji, None)
 
         if react:
@@ -520,7 +540,7 @@ class Menu(metaclass=_MenuMeta):
         if payload.user_id not in (self.bot.owner_id, self._author_id):
             return False
 
-        return str(payload.emoji) in self.buttons
+        return payload.emoji in self.buttons
 
     async def _internal_loop(self):
         try:
@@ -600,7 +620,7 @@ class Menu(metaclass=_MenuMeta):
         payload: :class:`discord.RawReactionActionEvent`
             The reaction event that triggered this update.
         """
-        button = self.buttons[str(payload.emoji)]
+        button = self.buttons[payload.emoji]
         if not self._running:
             return
 
