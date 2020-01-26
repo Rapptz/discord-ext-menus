@@ -676,7 +676,9 @@ class Menu(metaclass=_MenuMeta):
         self.__me = discord.Object(id=me.id)
         self._verify_permissions(ctx, channel, permissions)
         self._event.clear()
-        self.message = msg = await self.send_initial_message(ctx, channel)
+        msg = self.message
+        if msg is None:
+            self.message = msg = await self.send_initial_message(ctx, channel)
 
         if self.should_add_reactions():
             # Start the task first so we can listen to reactions before doing anything
@@ -708,7 +710,9 @@ class Menu(metaclass=_MenuMeta):
 
         This is internally assigned to the :attr:`message` attribute.
 
-        Subclasses must implement this.
+        Subclasses must implement this if they don't set the
+        :attr:`message` attribute themselves before starting the
+        menu via :meth:`start`.
 
         Parameters
         ------------
