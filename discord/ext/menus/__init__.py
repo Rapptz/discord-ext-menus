@@ -958,28 +958,30 @@ class MenuPages(Menu):
             return True
         return max_pages <= 2
 
-    @button('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f', skip_if=_skip_double_triangle_buttons)
+    @button('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
+            position=First(0), skip_if=_skip_double_triangle_buttons)
     async def go_to_first_page(self, payload):
         """go to the first page"""
         await self.show_page(0)
 
-    @button('\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f')
+    @button('\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f', position=First(1))
     async def go_to_previous_page(self, payload):
         """go to the previous page"""
         await self.show_checked_page(self.current_page - 1)
 
-    @button('\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f')
+    @button('\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f', position=Last(0))
     async def go_to_next_page(self, payload):
         """go to the next page"""
         await self.show_checked_page(self.current_page + 1)
 
-    @button('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f', skip_if=_skip_double_triangle_buttons)
+    @button('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
+            position=Last(1), skip_if=_skip_double_triangle_buttons)
     async def go_to_last_page(self, payload):
         """go to the last page"""
         # The call here is safe because it's guarded by skip_if
         await self.show_page(self._source.get_max_pages() - 1)
 
-    @button('\N{BLACK SQUARE FOR STOP}\ufe0f')
+    @button('\N{BLACK SQUARE FOR STOP}\ufe0f', position=Last(2))
     async def stop_pages(self, payload):
         """stops the pagination session."""
         self.stop()
