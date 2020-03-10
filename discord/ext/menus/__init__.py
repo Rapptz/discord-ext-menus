@@ -945,8 +945,6 @@ class KeysetPageSource:
 
         Subclasses must implement this.
 
-        .. note::
-
         Parameters
         -----------
         specifier: :class:`PageSpecifier`
@@ -957,6 +955,11 @@ class KeysetPageSource:
         Any
             The object represented by that page.
             This is passed into :meth:`format_page`.
+
+        Raises
+        -------
+        ValueError
+            The requested page is out of range.
         """
         raise NotImplementedError
 
@@ -1197,6 +1200,13 @@ class MenuKeysetPages(Menu):
         await self._source._prepare_once()
         await super().start(ctx, channel=channel, wait=wait)
 
+    async def show_checked_page(self, specifier):
+        try:
+            await self.show_page(specifier)
+        except ValueError:
+            # An error happened that can be handled, so ignore it.
+            pass
+
     async def show_current_page(self):
         if self._source.paginating:
             await self.show_page(self.current_page)
@@ -1205,25 +1215,25 @@ class MenuKeysetPages(Menu):
             position=First(0))
     async def go_to_first_page(self, payload):
         """go to the first page"""
-        await self.show_page(PageSpecifier.first())
+        await self.show_checked_page(PageSpecifier.first())
 
     @button('\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f', position=First(1))
     async def go_to_previous_page(self, payload):
         """go to the previous page"""
         self.current_page.direction = PageDirection.before
-        await self.show_page(self.current_page)
+        await self.show_checked_page(self.current_page)
 
     @button('\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f', position=Last(0))
     async def go_to_next_page(self, payload):
         """go to the next page"""
         self.current_page.direction = PageDirection.after
-        await self.show_page(self.current_page)
+        await self.show_checked_page(self.current_page)
 
     @button('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
             position=Last(1))
     async def go_to_last_page(self, payload):
         """go to the last page"""
-        await self.show_page(PageSpecifier.last())
+        await self.show_checked_page(PageSpecifier.last())
 
     @button('\N{BLACK SQUARE FOR STOP}\ufe0f', position=Last(2))
     async def stop_pages(self, payload):
