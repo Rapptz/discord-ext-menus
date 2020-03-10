@@ -26,6 +26,7 @@ DEALINGS IN THE SOFTWARE.
 
 import asyncio
 import discord
+from discord.enums import Enum
 
 import itertools
 import inspect
@@ -859,6 +860,140 @@ class PageSource:
         """
         raise NotImplementedError
 
+class PageDirection(Enum):
+    before = -1
+    after = +1
+
+class PageSpecifier:
+    """A data class that specifies a page for a KeysetPageSource.
+
+    Attributes
+    -----------
+    direction: :class:`PageDirection`:
+        Whether to request the page before or after the last page.
+    reference: Any:
+        The next page should be requested relative to this object.
+        None indicates either the first or the last page.
+    """
+
+    def __init__(self, direction, reference):
+        self.direction = direction
+        self.reference = reference
+
+    def __repr__(self):
+        return 'PageSpecifier({0.direction!r}, {0.reference!r})'.format(self)
+
+    @classmethod
+    def first(cls):
+        return cls(PageDirection.after, None)
+
+    @classmethod
+    def last(cls):
+        return cls(PageDirection.before, None)
+
+class KeysetPageSource:
+    """An interface representing a menu page's data source for the actual menu page.
+
+    Subclasses must implement the backing resource along with the following methods:
+
+    - :meth:`get_page`
+    - :meth:`is_paginating`
+    - :meth:`format_page`
+    """
+    async def _prepare_once(self):
+        try:
+            # Don't feel like formatting hasattr with
+            # the proper mangling
+            # read this as follows:
+            # if hasattr(self, '__prepare')
+            # except that it works as you expect
+            self.__prepare
+        except AttributeError:
+            await self.prepare()
+            self.__prepare = True
+
+    async def prepare(self):
+        """|coro|
+
+        A coroutine that is called after initialisation
+        but before anything else to do some asynchronous set up
+        as well as the one provided in ``__init__``.
+
+        By default this does nothing.
+
+        This coroutine will only be called once.
+        """
+        return
+
+    def is_paginating(self):
+        """An abstract method that notifies the :class:`MenuPages` whether or not
+        to start paginating. This signals whether to add reactions or not.
+
+        Subclasses must implement this.
+
+        Returns
+        --------
+        :class:`bool`
+            Whether to trigger pagination.
+        """
+        raise NotImplementedError
+
+    async def get_page(self, specifier):
+        """|coro|
+
+        An abstract method that retrieves an object representing the object to format.
+
+        Subclasses must implement this.
+
+        .. note::
+
+        Parameters
+        -----------
+        specifier: :class:`PageSpecifier`
+            The page to access.
+
+        Returns
+        ---------
+        Any
+            The object represented by that page.
+            This is passed into :meth:`format_page`.
+        """
+        raise NotImplementedError
+
+    async def format_page(self, menu, page):
+        """|maybecoro|
+
+        An abstract method to format the page.
+
+        This method must return one of the following types.
+
+        If this method returns a ``str`` then it is interpreted as returning
+        the ``content`` keyword argument in :meth:`discord.Message.edit`
+        and :meth:`discord.abc.Messageable.send`.
+
+        If this method returns a :class:`discord.Embed` then it is interpreted
+        as returning the ``embed`` keyword argument in :meth:`discord.Message.edit`
+        and :meth:`discord.abc.Messageable.send`.
+
+        If this method returns a ``dict`` then it is interpreted as the
+        keyword-arguments that are used in both :meth:`discord.Message.edit`
+        and :meth:`discord.abc.Messageable.send`. The two of interest are
+        ``embed`` and ``content``.
+
+        Parameters
+        ------------
+        menu: :class:`Menu`
+            The menu that wants to format this page.
+        page: Any
+            The page returned by :meth:`PageSource.get_page`.
+
+        Returns
+        ---------
+        Union[:class:`str`, :class:`discord.Embed`, :class:`dict`]
+            See above.
+        """
+        raise NotImplementedError
+
 class MenuPages(Menu):
     """A special type of Menu dedicated to pagination.
 
@@ -980,6 +1115,115 @@ class MenuPages(Menu):
         """go to the last page"""
         # The call here is safe because it's guarded by skip_if
         await self.show_page(self._source.get_max_pages() - 1)
+
+    @button('\N{BLACK SQUARE FOR STOP}\ufe0f', position=Last(2))
+    async def stop_pages(self, payload):
+        """stops the pagination session."""
+        self.stop()
+
+class MenuKeysetPages(Menu):
+    """A special type of Menu dedicated to pagination.
+
+    Attributes
+    ------------
+    current_page: PageSpecifier
+        The last page that we saw.
+    """
+    def __init__(self, source, **kwargs):
+        self._source = source
+        self.current_page = PageSpecifier.first()
+        super().__init__(**kwargs)
+
+    @property
+    def source(self):
+        """:class:`KeysetPageSource`: The source where the data comes from."""
+        return self._source
+
+    async def change_source(self, source):
+        """|coro|
+
+        Changes the :class:`KeysetPageSource` to a different one at runtime.
+
+        Once the change has been set, the menu is moved to the first
+        page of the new source if it was started.
+
+        Raises
+        --------
+        TypeError
+            A :class:`KeysetPageSource` was not passed.
+        """
+
+        if not isinstance(source, KeysetPageSource):
+            raise TypeError('Expected {0!r} not {1.__class__!r}.'.format(KeysetPageSource, source))
+
+        self._source = source
+        self.current_page = PageSpecifier.first()
+        if self.message is not None:
+            await source._prepare_once()
+            await self.show_page(self.current_page)
+
+    def should_add_reactions(self):
+        return self._source.is_paginating()
+
+    async def _get_kwargs_from_page(self, page):
+        value = await discord.utils.maybe_coroutine(self._source.format_page, self, page)
+        if isinstance(value, dict):
+            return value
+        elif isinstance(value, str):
+            return { 'content': value, 'embed': None }
+        elif isinstance(value, discord.Embed):
+            return { 'embed': value, 'content': None }
+
+    async def show_page(self, specifier):
+        page = await self._source.get_page(specifier)
+        self.current_page.reference = page
+        kwargs = await self._get_kwargs_from_page(page)
+        await self.message.edit(**kwargs)
+
+    async def send_initial_message(self, ctx, channel):
+        """|coro|
+
+        The default implementation of :meth:`Menu.send_initial_message`
+        for the interactive pagination session.
+
+        This implementation shows the first page of the source.
+        """
+        page = await self._source.get_page(PageSpecifier.first())
+        self.current_page.reference = page
+        kwargs = await self._get_kwargs_from_page(page)
+        return await channel.send(**kwargs)
+
+    async def start(self, ctx, *, channel=None, wait=False):
+        await self._source._prepare_once()
+        await super().start(ctx, channel=channel, wait=wait)
+
+    async def show_current_page(self):
+        if self._source.paginating:
+            await self.show_page(self.current_page)
+
+    @button('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
+            position=First(0))
+    async def go_to_first_page(self, payload):
+        """go to the first page"""
+        await self.show_page(PageSpecifier.first())
+
+    @button('\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f', position=First(1))
+    async def go_to_previous_page(self, payload):
+        """go to the previous page"""
+        self.current_page.direction = PageDirection.before
+        await self.show_page(self.current_page)
+
+    @button('\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f', position=Last(0))
+    async def go_to_next_page(self, payload):
+        """go to the next page"""
+        self.current_page.direction = PageDirection.after
+        await self.show_page(self.current_page)
+
+    @button('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
+            position=Last(1))
+    async def go_to_last_page(self, payload):
+        """go to the last page"""
+        await self.show_page(PageSpecifier.last())
 
     @button('\N{BLACK SQUARE FOR STOP}\ufe0f', position=Last(2))
     async def stop_pages(self, payload):
