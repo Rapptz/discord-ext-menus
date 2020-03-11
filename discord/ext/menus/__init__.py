@@ -872,7 +872,8 @@ class PageSpecifier:
     direction: :class:`PageDirection`:
         Whether to request the page before or after the last page.
     reference: Any:
-        The next page should be requested relative to this object.
+        The next page should be requested relative to this object, which was returned
+        by :meth:`KeysetPageSource.get_page`.
         None indicates either the first or the last page.
     """
 
@@ -1130,7 +1131,8 @@ class MenuKeysetPages(Menu):
     Attributes
     ------------
     current_page: PageSpecifier
-        The last page that we saw.
+        The last page that we saw. Its :attr:`PageSpecifier.reference` attribute
+        is set to the last object returned by :meth:`PageSpecifier.get_page`.
     """
     def __init__(self, source, **kwargs):
         self._source = source
