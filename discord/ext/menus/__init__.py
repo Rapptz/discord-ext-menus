@@ -878,7 +878,7 @@ class MenuPages(Menu):
         """:class:`PageSource`: The source where the data comes from."""
         return self._source
 
-    async def change_source(self, source, *, new_index = 0):
+    async def change_source(self, source, *, at_index = 0):
         """|coro|
 
         Changes the :class:`PageSource` to a different one at runtime.
@@ -891,8 +891,8 @@ class MenuPages(Menu):
         ------------
         source: :class:`PageSource`
             The new source to use.
-        new_index: :class:`int`
-            The page to display when changing to the new source.
+        at_index: :class:`int`
+            The page index to display when switching to the new source.
             
         Raises
         --------
@@ -904,10 +904,10 @@ class MenuPages(Menu):
             raise TypeError('Expected {0!r} not {1.__class__!r}.'.format(PageSource, source))
 
         self._source = source
-        self.current_page = new_index
+        self.current_page = at_index
         if self.message is not None:
             await source._prepare_once()
-            await self.show_page(new_index)
+            await self.show_page(at_index)
 
     def should_add_reactions(self):
         return self._source.is_paginating()
