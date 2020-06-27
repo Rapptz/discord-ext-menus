@@ -548,6 +548,7 @@ class Menu(metaclass=_MenuMeta):
 
     async def _internal_loop(self):
         try:
+            self.__timed_out = False
             loop = self.bot.loop
             # Ensure the name exists for the cancellation handling
             tasks = []
