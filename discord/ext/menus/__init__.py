@@ -704,15 +704,9 @@ class Menu(metaclass=_MenuMeta):
         A coroutine that is called when the menu loop has completed
         its run. This is useful if some asynchronous clean-up is
         required after the fact.
-        """
-        return
-    
-    async def timed_out(self):
-        """|coro|
-
-        A coroutine that is called when the menu has timed out 
-        while waiting for reactions. This is useful when trying to 
-        inform the user about the time out.
+        
+        When the menu finished because of time out, :attr:`__timed_out`
+        will be True.
         """
         return
 
