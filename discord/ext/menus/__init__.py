@@ -588,7 +588,7 @@ class Menu(metaclass=_MenuMeta):
                 task.cancel()
 
             try:
-                await self.finalize()
+                await self.finalize(self.__timed_out)
             except Exception:
                 pass
 
@@ -698,15 +698,15 @@ class Menu(metaclass=_MenuMeta):
             if wait:
                 await self._event.wait()
 
-    async def finalize(self):
+    async def finalize(self, timed_out):
         """|coro|
 
         A coroutine that is called when the menu loop has completed
         its run. This is useful if some asynchronous clean-up is
         required after the fact.
         
-        When the menu finished because of time out, :attr:`__timed_out`
-        will be True.
+        Passes :attr:`timed_out` which indicates if the menu stopped
+        due to time out.
         """
         return
 
