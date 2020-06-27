@@ -579,10 +579,7 @@ class Menu(metaclass=_MenuMeta):
                 # consider this my warning.
 
         except asyncio.TimeoutError:
-            try:
-                await self.timed_out()
-            except Exception:
-                pass
+            self.__timed_out = True
         finally:
             self._event.set()
 
