@@ -591,6 +591,8 @@ class Menu(metaclass=_MenuMeta):
                 await self.finalize(self.__timed_out)
             except Exception:
                 pass
+            finally:
+                self.__timed_out = False
 
             # Can't do any requests if the bot is closed
             if self.bot.is_closed():
