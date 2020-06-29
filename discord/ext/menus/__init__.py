@@ -546,6 +546,40 @@ class Menu(metaclass=_MenuMeta):
 
         return payload.emoji in self.buttons
 
+    def message_check(self, message):
+        """The function that is used to check whether the message should be processed.
+        This is passed to :meth:`discord.ext.commands.Bot.wait_for <Bot.wait_for>`.
+
+        There should be no reason to override this function for most users.
+
+        Parameters
+        ------------
+        message: :class:`discord.Message`
+            The message to check.
+
+        Returns
+        ---------
+        :class:`bool`
+            Whether the message should be processed.
+        """
+        if message.author.id not in (self.bot.owner_id, self._author_id):
+            return False
+
+        return True
+
+    async def message_input(self, message):
+        """|coro|
+
+        A coroutine that is called when the user provides a message
+        as input. This is useful for text input to a question etc.
+
+        Parameters
+        ------------
+        message: :class:`discord.Message`
+            The message from the user.
+        """
+        return
+
     async def _internal_loop(self):
         try:
             loop = self.bot.loop
@@ -554,7 +588,8 @@ class Menu(metaclass=_MenuMeta):
             while self._running:
                 tasks = [
                     asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
-                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check))
+                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check)),
+                    asyncio.ensure_future(self.bot.wait_for('on_message', check=self.message_check))
                 ]
                 done, pending = await asyncio.wait(tasks, timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED)
                 for task in pending:
@@ -621,9 +656,12 @@ class Menu(metaclass=_MenuMeta):
 
         Parameters
         -----------
-        payload: :class:`discord.RawReactionActionEvent`
-            The reaction event that triggered this update.
+        payload: Any
+            The reaction event or message that triggered this update.
         """
+        if isinstance(payload, discord.Message):
+            return await self.message_input(payload)
+
         button = self.buttons[payload.emoji]
         if not self._running:
             return
