@@ -562,10 +562,7 @@ class Menu(metaclass=_MenuMeta):
         :class:`bool`
             Whether the message should be processed.
         """
-        if message.author.id not in (self.bot.owner_id, self._author_id):
-            return False
-
-        return True
+        return message.author.id in (self.bot.owner_id, self._author_id)
 
     async def message_input(self, message):
         """|coro|
