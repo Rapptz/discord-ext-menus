@@ -589,7 +589,7 @@ class Menu(metaclass=_MenuMeta):
                 tasks = [
                     asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
                     asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check)),
-                    asyncio.ensure_future(self.bot.wait_for('on_message', check=self.message_check))
+                    asyncio.ensure_future(self.bot.wait_for('message', check=self.message_check))
                 ]
                 done, pending = await asyncio.wait(tasks, timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED)
                 for task in pending:
