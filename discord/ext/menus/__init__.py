@@ -548,6 +548,7 @@ class Menu(metaclass=_MenuMeta):
 
     async def _internal_loop(self):
         try:
+            self.__timed_out = False
             loop = self.bot.loop
             # Ensure the name exists for the cancellation handling
             tasks = []
@@ -579,7 +580,7 @@ class Menu(metaclass=_MenuMeta):
                 # consider this my warning.
 
         except asyncio.TimeoutError:
-            pass
+            self.__timed_out = True
         finally:
             self._event.set()
 
@@ -588,9 +589,11 @@ class Menu(metaclass=_MenuMeta):
                 task.cancel()
 
             try:
-                await self.finalize()
+                await self.finalize(self.__timed_out)
             except Exception:
                 pass
+            finally:
+                self.__timed_out = False
 
             # Can't do any requests if the bot is closed
             if self.bot.is_closed():
@@ -701,12 +704,17 @@ class Menu(metaclass=_MenuMeta):
             if wait:
                 await self._event.wait()
 
-    async def finalize(self):
+    async def finalize(self, timed_out):
         """|coro|
 
         A coroutine that is called when the menu loop has completed
         its run. This is useful if some asynchronous clean-up is
         required after the fact.
+        
+        Parameters
+        --------------
+        timed_out: :class:`bool`
+            Whether the menu completed due to timing out.
         """
         return
 
