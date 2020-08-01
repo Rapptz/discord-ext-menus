@@ -708,8 +708,10 @@ class Menu(metaclass=_MenuMeta):
         its run. This is useful if some asynchronous clean-up is
         required after the fact.
         
-        Passes :attr:`timed_out` which indicates if the menu stopped
-        due to time out.
+        Parameters
+        --------------
+        timed_out: :class:`bool`
+            Whether the menu completed due to timing out.
         """
         return
 
