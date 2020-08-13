@@ -30,6 +30,7 @@ import discord
 import itertools
 import inspect
 import bisect
+import functools
 import re
 from collections import OrderedDict, namedtuple
 
@@ -38,6 +39,18 @@ __version__ = '1.0.0-a'
 
 class MenuError(Exception):
     pass
+
+class ButtonError(MenuError):
+    pass
+
+class ButtonCheckFailure(ButtonError):
+    pass
+
+class ButtonCheckAnyFailure(ButtonCheckFailure):
+    def __init__(self, checks, errors):
+        self.checks = checks
+        self.errors = errors
+        super().__init__('You do not have permission to use this button.')
 
 class CannotEmbedLinks(MenuError):
     def __init__(self):
@@ -144,15 +157,49 @@ class Button:
     lock: :class:`bool`
         Whether the button should lock all other buttons from being processed
         until this button is done. Defaults to ``True``.
-    """
-    __slots__ = ('emoji', '_action', '_skip_if', 'position', 'lock')
+    checks: List[Callable[..., :class:`bool`]]
+        A list of predicates that verifies if the button could be executed
+        with the given :class:`Menu` and :class:`discord.RawReactionActionEvent` parameters.
 
-    def __init__(self, emoji, action, *, skip_if=None, position=None, lock=True):
+    """
+    __slots__ = ('emoji', '_action', '_skip_if', 'position', 'lock', 'checks')
+
+    def __init__(self, emoji, action, *, skip_if=None, position=None, lock=True, **kwargs):
         self.emoji = _cast_emoji(emoji)
         self.action = action
         self.skip_if = skip_if
         self.position = position or Position(0)
         self.lock = lock
+        try:
+            checks = action.__button_checks__
+            checks.reverse()
+        except AttributeError:
+            checks = kwargs.get('checks', [])
+        self.checks = checks
+
+    def add_check(self, func):
+        """Adds a check to the button.
+        This is the non-decorator interface to :func:`.check`.
+        Parameters
+        -----------
+        func
+            The function that will be used as a check.
+        """
+        self.checks.append(func)
+
+    def remove_check(self, func):
+        """Removes a check from the button.
+        This function is idempotent and will not raise an exception
+        if the function is not in the button's checks.
+        Parameters
+        -----------
+        func
+            The function to remove from the checks.
+        """
+        try:
+            self.checks.remove(func)
+        except ValueError:
+            pass
 
     @property
     def skip_if(self):
@@ -329,7 +376,6 @@ class Menu(metaclass=_MenuMeta):
         self.message = message
         self.ctx = None
         self.bot = None
-        self._author_id = None
         self._buttons = self.__class__.get_buttons()
         self._lock = asyncio.Lock()
         self._event = asyncio.Event()
@@ -541,8 +587,6 @@ class Menu(metaclass=_MenuMeta):
         """
         if payload.message_id != self.message.id:
             return False
-        if payload.user_id not in {self.bot.owner_id, self._author_id, *self.bot.owner_ids}:
-            return False
 
         return payload.emoji in self.buttons
 
@@ -566,7 +610,14 @@ class Menu(metaclass=_MenuMeta):
 
                 # Exception will propagate if e.g. cancelled or timed out
                 payload = done.pop().result()
-                loop.create_task(self.update(payload))
+                try:
+                    checks_passed = await discord.utils.async_all(
+                        predicate(self, payload) for predicate in self.buttons[payload.emoji].checks
+                    )
+                    if checks_passed:
+                        loop.create_task(self.update(payload))
+                except ButtonCheckFailure:
+                    continue
 
                 # NOTE: Removing the reaction ourselves after it's been done when
                 # mixed with the checks above is incredibly racy.
@@ -675,7 +726,6 @@ class Menu(metaclass=_MenuMeta):
 
         self.bot = bot = ctx.bot
         self.ctx = ctx
-        self._author_id = ctx.author.id
         channel = channel or ctx.channel
         is_guild = isinstance(channel, discord.abc.GuildChannel)
         me = ctx.guild.me if is_guild else ctx.bot.user
@@ -1200,3 +1250,103 @@ class AsyncIteratorPageSource(PageSource):
             return await self._get_single_page(page_number)
         else:
             return await self._get_page_range(page_number)
+
+
+def check(predicate):
+    r"""A decorator that adds a check to the :class:`Button`.
+        These checks could be accessed via :attr:`Button.checks`.
+        The usage of the decorator is the same as in :func:`discord.ext.commands.check`
+        except that predicate should take in two parameters:
+        :class:`Menu` and :class:`discord.RawReactionActionEvent`.
+
+        Parameters
+        -----------
+        predicate: Callable[[:class:`Menu`, :class:`discord.RawReactionActionEvent`], :class:`bool`]
+            The predicate to check if the command should be invoked.
+        """
+
+    def decorator(func):
+        if isinstance(func, Button):
+            func.checks.append(predicate)
+        else:
+            if not hasattr(func, '__button_checks__'):
+                func.__button_checks__ = []
+
+            func.__button_checks__.append(predicate)
+
+        return func
+
+    if inspect.iscoroutinefunction(predicate):
+        decorator.predicate = predicate
+    else:
+        @functools.wraps(predicate)
+        async def wrapper(menu, payload):
+            return predicate(menu, payload)
+        decorator.predicate = wrapper
+
+    return decorator
+
+
+def check_any(*checks):
+    r"""A :func:`check` that is added that checks if any of the checks passed
+    will pass, i.e. using logical OR.
+    If all checks fail then :exc:`ButtonCheckAnyFailure` is raised to signal the failure.
+    It inherits from :exc:`ButtonCheckFailure`.
+    .. note::
+        The ``predicate`` attribute for this function **is** a coroutine.
+
+    Parameters
+    ------------
+    \*checks: Callable[[:class:`Menu`, :class:`discord.RawReactionActionEvent`], :class:`bool`]
+        An argument list of checks that have been decorated with
+        the :func:`check` decorator.
+
+    Raises
+    -------
+    TypeError
+        A check passed has not been decorated with the :func:`check`
+        decorator.
+    """
+
+    unwrapped = []
+    for wrapped in checks:
+        try:
+            pred = wrapped.predicate
+        except AttributeError:
+            raise TypeError('%r must be wrapped by menus.check decorator' % wrapped) from None
+        else:
+            unwrapped.append(pred)
+
+    async def predicate(menu, payload):
+        errors = []
+        for func in unwrapped:
+            try:
+                value = await func(menu, payload)
+            except ButtonCheckFailure as e:
+                errors.append(e)
+            else:
+                if value:
+                    return True
+        # if we're here, all checks failed
+        raise ButtonCheckAnyFailure(unwrapped, errors)
+
+    return check(predicate)
+
+
+def is_owner():
+    """A :func:`.check` that checks if the person using this button is the
+    owner of the bot.
+    """
+    async def predicate(menu, payload):
+        return payload.user_id in {menu.bot.owner_id, *menu.bot.owner_ids}
+    return check(predicate)
+
+
+def is_author():
+    """A :func:`.check` that checks if the person using this button is the
+    author of the menu session.
+    """
+    def predicate(menu, payload):
+        return payload.user_id == menu.ctx.author.id
+
+    return check(predicate)
