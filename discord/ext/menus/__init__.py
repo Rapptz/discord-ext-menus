@@ -587,6 +587,8 @@ class Menu(metaclass=_MenuMeta):
         """
         if payload.message_id != self.message.id:
             return False
+        if (payload.member and payload.member.bot) or self.bot.get_user(payload.user_id).bot:
+            return False
 
         return payload.emoji in self.buttons
 
