@@ -92,7 +92,7 @@ async def delete_things(ctx):
 
 The meat of the library is the `Menu` class but a `MenuPages` class is provided for the common use case of actually making a pagination session.
 
-The `MenuPages` works similar to `Menu` except things are separated into a `PageSource`. The actual `MenuPages` rarely needs to be modified, instead we pass in a `PageSource` that deals with the data representation and formatting of the data we want to paginate.
+The `MenuPages` works similar to `Menu` except things are separated into a `PageSource`. The actual `MenuPages` rarely needs to be modified, instead we pass in a `PageSource` that deals with the data representation and formatting of the data we want to paginate. Please note that if you supply a message with `MenuPages`, you may need to call `:coro: show_page` on your instanized menu otherwise the first page may not appear.
 
 The library comes with a few built-in page sources:
 
