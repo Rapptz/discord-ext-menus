@@ -297,6 +297,8 @@ class Menu(metaclass=_MenuMeta):
         The timeout to wait between button inputs.
     delete_message_after: :class:`bool`
         Whether to delete the message after the menu interaction is done.
+    clear_reaction: :class:`bool`
+        Whether to remove the reaction that triggered the event.
     clear_reactions_after: :class:`bool`
         Whether to clear reactions after the menu interaction is done.
         Note that :attr:`delete_message_after` takes priority over this attribute.
@@ -316,11 +318,12 @@ class Menu(metaclass=_MenuMeta):
         calling :meth:`send_initial_message`\, if for example you have a pre-existing
         message you want to attach a menu to.
     """
-    def __init__(self, *, timeout=180.0, delete_message_after=False,
+    def __init__(self, *, timeout=180.0, delete_message_after=False, clear_reaction=True, 
                           clear_reactions_after=False, check_embeds=False, message=None):
 
         self.timeout = timeout
         self.delete_message_after = delete_message_after
+        self.clear_reaction = clear_reacion
         self.clear_reactions_after = clear_reactions_after
         self.check_embeds = check_embeds
         self._can_remove_reactions = False
@@ -636,8 +639,10 @@ class Menu(metaclass=_MenuMeta):
                 async with self._lock:
                     if self._running:
                         await button(self, payload)
+                        await self.message.remove_reaction(payload.emoji, self.bot.get_user(payload.user_id))
             else:
                 await button(self, payload)
+                await self.message.remove_reaction(payload.emoji, self.bot.get_user(payload.user_id))
         except Exception:
             # TODO: logging?
             import traceback
