@@ -323,7 +323,7 @@ class Menu(metaclass=_MenuMeta):
 
         self.timeout = timeout
         self.delete_message_after = delete_message_after
-        self.clear_reaction = clear_reacion
+        self.clear_reaction = clear_reaction
         self.clear_reactions_after = clear_reactions_after
         self.check_embeds = check_embeds
         self._can_remove_reactions = False
