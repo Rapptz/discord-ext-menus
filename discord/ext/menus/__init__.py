@@ -960,7 +960,7 @@ class MenuPages(Menu):
             pass
 
     async def show_current_page(self):
-        if self._source.paginating:
+        if self._source.is_paginating():
             await self.show_page(self.current_page)
 
     def _skip_double_triangle_buttons(self):
