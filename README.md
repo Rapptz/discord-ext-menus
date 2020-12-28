@@ -41,7 +41,7 @@ class MyMenu(menus.Menu):
 Now, within a command we just instantiate it and we start it like so:
 
 ```py
-@bot.command()
+@bot.command(?)
 async def menu_example(ctx):
     m = MyMenu()
     await m.start(ctx)
