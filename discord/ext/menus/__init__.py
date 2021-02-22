@@ -645,7 +645,7 @@ class Menu(metaclass=_MenuMeta):
         except Exception as exc:
             await self.menu_update_error_handler(exc)
 
-    async def menu_update_error_handler(self, exc: Exception):
+    async def on_menu_button_error(self, exc):
         """|coro|
 
         Handles reporting of errors while updating the menu from events.
