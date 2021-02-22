@@ -643,7 +643,7 @@ class Menu(metaclass=_MenuMeta):
             else:
                 await button(self, payload)
         except Exception as exc:
-            await self.menu_update_error_handler(exc)
+            await self.on_menu_button_error(exc)
 
     async def on_menu_button_error(self, exc):
         """|coro|
