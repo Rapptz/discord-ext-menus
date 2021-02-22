@@ -649,14 +649,14 @@ class Menu(metaclass=_MenuMeta):
         """|coro|
 
         Handles reporting of errors while updating the menu from events.
-        The default behavior is to log the exception.
+        The default behaviour is to log the exception.
 
         This may be overriden by subclasses.
 
         Parameters
         ----------
         exc: :class:`Exception`
-            The exception which was raised during a menu update
+            The exception which was raised during a menu update.
         """
         # some users may wish to take other actions during or beyond logging
         # which would require awaiting, such as stopping an erroring menu.
