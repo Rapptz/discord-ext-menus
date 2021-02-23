@@ -30,11 +30,15 @@ import discord
 import itertools
 import inspect
 import bisect
+import logging
 import re
 from collections import OrderedDict, namedtuple
 
 # Needed for the setup.py script
 __version__ = '1.0.0-a'
+
+# consistency with the `discord` namespaced logging
+log = logging.getLogger(__name__)
 
 class MenuError(Exception):
     pass
@@ -638,10 +642,25 @@ class Menu(metaclass=_MenuMeta):
                         await button(self, payload)
             else:
                 await button(self, payload)
-        except Exception:
-            # TODO: logging?
-            import traceback
-            traceback.print_exc()
+        except Exception as exc:
+            await self.on_menu_button_error(exc)
+
+    async def on_menu_button_error(self, exc):
+        """|coro|
+
+        Handles reporting of errors while updating the menu from events.
+        The default behaviour is to log the exception.
+
+        This may be overriden by subclasses.
+
+        Parameters
+        ----------
+        exc: :class:`Exception`
+            The exception which was raised during a menu update.
+        """
+        # some users may wish to take other actions during or beyond logging
+        # which would require awaiting, such as stopping an erroring menu.
+        log.exception("Unhandled exception during menu update.", exc_info=exc)
 
     async def start(self, ctx, *, channel=None, wait=False):
         """|coro|
