@@ -319,9 +319,11 @@ class Menu(metaclass=_MenuMeta):
         message of :meth:`send_initial_message`. You can set it in order to avoid
         calling :meth:`send_initial_message`\, if for example you have a pre-existing
         message you want to attach a menu to.
+    ignore_removal: Optional[:class:`bool`]
+        If the bot should ingore reaction removal.
     """
     def __init__(self, *, timeout=180.0, delete_message_after=False,
-                          clear_reactions_after=False, check_embeds=False, message=None):
+                          clear_reactions_after=False, check_embeds=False, message=None, ignore_removal=False):
 
         self.timeout = timeout
         self.delete_message_after = delete_message_after
@@ -337,6 +339,7 @@ class Menu(metaclass=_MenuMeta):
         self._buttons = self.__class__.get_buttons()
         self._lock = asyncio.Lock()
         self._event = asyncio.Event()
+        self.ignore_removal = ignore_removal
 
     @discord.utils.cached_property
     def buttons(self):
@@ -557,10 +560,15 @@ class Menu(metaclass=_MenuMeta):
             # Ensure the name exists for the cancellation handling
             tasks = []
             while self._running:
-                tasks = [
-                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
-                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check))
-                ]
+                if not self.ignore_removal:
+                    tasks = [
+                        asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
+                        asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check))
+                    ]
+                elif self.ignore_removal:
+                    tasks = [
+                        asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
+                    ]
                 done, pending = await asyncio.wait(tasks, timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED)
                 for task in pending:
                     task.cancel()
@@ -571,17 +579,6 @@ class Menu(metaclass=_MenuMeta):
                 # Exception will propagate if e.g. cancelled or timed out
                 payload = done.pop().result()
                 loop.create_task(self.update(payload))
-
-                # NOTE: Removing the reaction ourselves after it's been done when
-                # mixed with the checks above is incredibly racy.
-                # There is no guarantee when the MESSAGE_REACTION_REMOVE event will
-                # be called, and chances are when it does happen it'll always be
-                # after the remove_reaction HTTP call has returned back to the caller
-                # which means that the stuff above will catch the reaction that we
-                # just removed.
-
-                # For the future sake of myself and to save myself the hours in the future
-                # consider this my warning.
 
         except asyncio.TimeoutError:
             self.__timed_out = True
