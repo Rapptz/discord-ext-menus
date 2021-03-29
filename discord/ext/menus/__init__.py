@@ -567,7 +567,10 @@ class Menu(metaclass=_MenuMeta):
                     payload = await self.bot.wait_for(
                         'raw_reaction_add', check=self.reaction_check, timeout=self.timeout
                     )
-                    await self.message.remove_reaction(payload.emoji, discord.Object(payload.user_id))
+                    try:
+                        await self.message.remove_reaction(payload.emoji, discord.Object(payload.user_id))
+                    except discord.Forbidden:
+                        pass
                     loop.create_task(self.update(payload))
                 else:
                     tasks = [
