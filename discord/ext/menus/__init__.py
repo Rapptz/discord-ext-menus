@@ -306,6 +306,10 @@ class Menu(metaclass=_MenuMeta):
         Note that :attr:`delete_message_after` takes priority over this attribute.
         If the bot does not have permissions to clear the reactions then it will
         delete the reactions one by one.
+    auto_remove_reactions: :class:`bool`
+        Whether to automatically remove a users reaction when they hit a button.
+        If set to False, the bot will listent for both the `add` and `remove`
+        events, otherwise it will only listent for the `add` event.
     check_embeds: :class:`bool`
         Whether to verify embed permissions as well.
     ctx: Optional[:class:`commands.Context`]
@@ -321,11 +325,13 @@ class Menu(metaclass=_MenuMeta):
         message you want to attach a menu to.
     """
     def __init__(self, *, timeout=180.0, delete_message_after=False,
-                          clear_reactions_after=False, check_embeds=False, message=None):
+                          clear_reactions_after=False, auto_remove_reactions=False,
+                          check_embeds=False, message=None):
 
         self.timeout = timeout
         self.delete_message_after = delete_message_after
         self.clear_reactions_after = clear_reactions_after
+        self.auto_remove_reactions = auto_remove_reactions
         self.check_embeds = check_embeds
         self._can_remove_reactions = False
         self.__tasks = []
@@ -557,20 +563,27 @@ class Menu(metaclass=_MenuMeta):
             # Ensure the name exists for the cancellation handling
             tasks = []
             while self._running:
-                tasks = [
-                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
-                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check))
-                ]
-                done, pending = await asyncio.wait(tasks, timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED)
-                for task in pending:
-                    task.cancel()
+                if self.auto_remove_reactions:
+                    payload = await self.bot.wait_for(
+                        'raw_reaction_add', check=self.reaction_check, timeout=self.timeout
+                    )
+                    await self.message.remove_reaction(payload.emoji, discord.Object(payload.user_id))
+                    loop.create_task(self.update(payload))
+                else:
+                    tasks = [
+                        asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
+                        asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check))
+                    ]
+                    done, pending = await asyncio.wait(tasks, timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED)
+                    for task in pending:
+                        task.cancel()
 
-                if len(done) == 0:
-                    raise asyncio.TimeoutError()
+                    if len(done) == 0:
+                        raise asyncio.TimeoutError()
 
-                # Exception will propagate if e.g. cancelled or timed out
-                payload = done.pop().result()
-                loop.create_task(self.update(payload))
+                    # Exception will propagate if e.g. cancelled or timed out
+                    payload = done.pop().result()
+                    loop.create_task(self.update(payload))
 
                 # NOTE: Removing the reaction ourselves after it's been done when
                 # mixed with the checks above is incredibly racy.
