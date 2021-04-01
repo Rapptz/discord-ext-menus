@@ -103,7 +103,7 @@ class First(Position):
     def __init__(self, number=0):
         super().__init__(number, bucket=0)
 
-_custom_emoji = re.compile(r'<?(?P<animated>a)?:?(?P<name>[A-Za-z0-9\_]+):(?P<id>[0-9]{13,21})>?')
+_custom_emoji = re.compile(r'<?(?P<animated>a)?:?(?P<name>[A-Za-z0-9\_]+):(?P<id>[0-9]{13,20})>?')
 
 def _cast_emoji(obj, *, _custom_emoji=_custom_emoji):
     if isinstance(obj, discord.PartialEmoji):
