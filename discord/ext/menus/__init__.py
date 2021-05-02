@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 
 
 T = TypeVar('T')
-KT = TypeVar('KT', bound="SupportsLessThan")
+KT = TypeVar('KT', bound='SupportsLessThan')
 IT = TypeVar('IT')
 MNUT = TypeVar('MNUT', bound='Menu')
 
