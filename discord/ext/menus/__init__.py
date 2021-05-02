@@ -1166,7 +1166,7 @@ class _GroupByEntry(tuple, Generic[KT, IT]):
         key: KT
         items: List[IT]
 
-    def __new__(cls, key: Any, items: Any):
+    def __new__(cls, key: KT, items: List[IT]):
         new_cls = super().__new__(cls, (key, items))
         new_cls.key = key
         new_cls.items = items
