@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from discord.ext import commands
 
     class SupportsLessThan(Protocol):
-        def __lt__(self, other: Any) -> bool:
+        def __lt__(self, __other: Any) -> bool:
             ...
 
 
@@ -314,10 +314,10 @@ class _MenuMeta(type):
     if TYPE_CHECKING:
         __menu_buttons__: List[_BtnFunc]
 
-    def __new__(cls: Type[type], name: str, bases: Tuple[type, ...], attrs: Dict[str, Any], **kwargs: Any):
+    def __new__(cls: Type[type], name: str, bases: Tuple[type, ...], attrs: Dict[str, Any], **kwargs: Any) -> _MenuMeta:
         buttons = []
 
-        new_cls = cast(Type[_MenuMeta], super().__new__(cls, name, bases, attrs))
+        new_cls = cast(_MenuMeta, super().__new__(cls, name, bases, attrs))
 
         inherit_buttons = kwargs.pop('inherit_buttons', True)
         if inherit_buttons:
@@ -341,7 +341,7 @@ class _MenuMeta(type):
 
         new_cls.__menu_buttons__ = buttons
 
-        return type.__new__(cls, name, bases, attrs)
+        return new_cls
 
     def get_buttons(cls) -> Dict[discord.PartialEmoji, Button]:
         buttons = {}
@@ -985,13 +985,13 @@ class MenuPages(Menu, Generic[T]):
         between [0, :attr:`PageSource.max_pages`).
     """
 
-    def __init__(self, source: PageSource[T], **kwargs: Any):
+    def __init__(self, source: PageSource[T], **kwargs: Any) -> None:
         self._source = source
         self.current_page: int = 0
         super().__init__(**kwargs)
 
     @property
-    def source(self) -> PageSource:
+    def source(self) -> PageSource[T]:
         """:class:`PageSource`: The source where the data comes from."""
         return self._source
 
@@ -1022,7 +1022,7 @@ class MenuPages(Menu, Generic[T]):
     def should_add_reactions(self) -> bool:
         return self._source.is_paginating()
 
-    async def _get_kwargs_from_page(self, page) -> Dict[str, Any]:
+    async def _get_kwargs_from_page(self, page: T) -> Dict[str, Any]:
         value = await discord.utils.maybe_coroutine(self._source.format_page, self, page)
         if isinstance(value, dict):
             return value
@@ -1111,7 +1111,7 @@ class MenuPages(Menu, Generic[T]):
         self.stop()
 
 
-class ListPageSource(PageSource[T], Generic[T]):
+class ListPageSource(PageSource[T]):
     """A data source for a sequence of items.
 
     This page source does not handle any sort of formatting, leaving it up
@@ -1161,12 +1161,12 @@ class ListPageSource(PageSource[T], Generic[T]):
         return self.entries[base : base + self.per_page]
 
 
-class _GroupByEntry(tuple, Generic[KT, IT]):
+class GroupByEntry(Tuple[KT, List[IT]]):
     if TYPE_CHECKING:
         key: KT
         items: List[IT]
 
-    def __new__(cls, key: KT, items: List[IT]):
+    def __new__(cls: Type[GroupByEntry[KT, IT]], key: KT, items: List[IT]) -> GroupByEntry[KT, IT]:
         new_cls = super().__new__(cls, (key, items))
         new_cls.key = key
         new_cls.items = items
@@ -1205,14 +1205,14 @@ class GroupByPageSource(ListPageSource[IT], Generic[KT, IT]):
             size = len(g)
 
             # Chunk the nested pages
-            nested.extend(_GroupByEntry(key=k, items=g[i : i + per_page]) for i in range(0, size, per_page))
+            nested.extend(GroupByEntry(key=k, items=g[i : i + per_page]) for i in range(0, size, per_page))
 
         super().__init__(nested, per_page=1)
 
     async def get_page(self, page_number: int) -> IT:
         return self.entries[page_number]
 
-    async def format_page(self, menu: Menu, entry: _GroupByEntry[KT, IT]) -> dict[str, Any]:
+    async def format_page(self, menu: Menu, entry: GroupByEntry[KT, IT]) -> Dict[str, Any]:
         """An abstract method to format the page.
 
         This works similar to the :meth:`ListPageSource.format_page` except
@@ -1249,7 +1249,7 @@ def _aiter(obj: Any, *, _isasync: Callable[[Any], bool] = inspect.iscoroutinefun
     return async_iter
 
 
-class AsyncIteratorPageSource(PageSource[T], Generic[T]):
+class AsyncIteratorPageSource(PageSource[T]):
     """A data source for data backed by an asynchronous iterator.
 
     This page source does not handle any sort of formatting, leaving it up
