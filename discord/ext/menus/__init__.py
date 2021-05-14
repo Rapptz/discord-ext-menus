@@ -168,7 +168,7 @@ def _cast_emoji(obj: Any, *, _custom_emoji: Pattern[str] = _custom_emoji) -> dis
     return discord.PartialEmoji(name=obj, id=None, animated=False)
 
 
-class Button:
+class Button(Generic[MNUT, T]):
     """Represents a reaction-style button for the :class:`Menu`.
 
     There are two ways to create this, the first being through explicitly
@@ -204,9 +204,9 @@ class Button:
     def __init__(
         self,
         emoji: discord.PartialEmoji,
-        action: _BtnFunc,
+        action: _BtnFunc[MNUT, T],
         *,
-        skip_if: Optional[Callable[[Menu], bool]] = None,
+        skip_if: Optional[Callable[[MNUT], bool]] = None,
         position: Optional[Position] = None,
         lock: bool = True
     ):
@@ -217,11 +217,11 @@ class Button:
         self.lock = lock
 
     @property
-    def skip_if(self) -> Callable[[Menu], bool]:
+    def skip_if(self) -> Callable[[MNUT], bool]:
         return self._skip_if
 
     @skip_if.setter
-    def skip_if(self, value: Optional[Callable[[Menu], bool]]) -> None:  # type: ignore
+    def skip_if(self, value: Optional[Callable[[MNUT], bool]]) -> None:  # type: ignore
         if value is None:
             self._skip_if = lambda x: False
             return
@@ -238,11 +238,11 @@ class Button:
             self._skip_if = value.__func__
 
     @property
-    def action(self) -> _BtnFunc:
+    def action(self) -> _BtnFunc[MNUT, T]:
         return self._action
 
     @action.setter
-    def action(self, value: _BtnFunc) -> None:
+    def action(self, value: _BtnFunc[MNUT, T]) -> None:
         try:
             menu_self = value.__self__
         except AttributeError:
@@ -259,7 +259,7 @@ class Button:
 
         self._action = value
 
-    def __call__(self, menu: Menu, payload: discord.RawReactionActionEvent) -> Optional[Any]:
+    def __call__(self, menu: MNUT, payload: discord.RawReactionActionEvent) -> Optional[T]:
         if self.skip_if(menu):
             return
         return self._action(menu, payload)
@@ -271,7 +271,7 @@ class Button:
         return not self.skip_if(menu)
 
 
-def button(emoji: Union[str, discord.PartialEmoji], **kwargs: Any) -> Callable[[_BtnFunc], _BtnFunc]:
+def button(emoji: Union[str, discord.PartialEmoji], **kwargs: Any) -> Callable[[_BtnFunc[MNUT, T]], _BtnFunc[MNUT, T]]:
     """Denotes a method to be button for the :class:`Menu`.
 
     The methods being wrapped must have both a ``self`` and a ``payload``
@@ -312,7 +312,7 @@ def button(emoji: Union[str, discord.PartialEmoji], **kwargs: Any) -> Callable[[
 
 class _MenuMeta(type):
     if TYPE_CHECKING:
-        __menu_buttons__: List[_BtnFunc]
+        __menu_buttons__: List[_BtnFunc[Any, Any]]
 
     def __new__(cls: Type[type], name: str, bases: Tuple[type, ...], attrs: Dict[str, Any], **kwargs: Any) -> _MenuMeta:
         buttons = []
