@@ -39,7 +39,6 @@ from typing import (
     List,
     Optional,
     Pattern,
-    Protocol,
     Sequence,
     Tuple,
     TYPE_CHECKING,
@@ -57,9 +56,7 @@ import re
 if TYPE_CHECKING:
     from discord.ext import commands
 
-    class SupportsLessThan(Protocol):
-        def __lt__(self, __other: Any) -> bool:
-            ...
+    from _typeshed import SupportsLessThan
 
 
 T = TypeVar('T')
