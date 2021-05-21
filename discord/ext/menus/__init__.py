@@ -3,7 +3,7 @@ from .DISCORDEXTMENUS import *
 
 
 __author__ = "Rapptz"
-__copyright__ = "Copyright {} 2015-2019".format(__author__)
+__copyright__ = "Copyright {} 2021".format(__author__)
 __version__ = "1.0.0-a"
 
 def get_version():
