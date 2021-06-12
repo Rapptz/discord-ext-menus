@@ -32,7 +32,6 @@ from typing import (
     AsyncIterator,
     Awaitable,
     Callable,
-    cast,
     Dict,
     Generic,
     NoReturn,
@@ -311,10 +310,10 @@ class _MenuMeta(type):
     if TYPE_CHECKING:
         __menu_buttons__: List[_BtnFunc[Any, Any]]
 
-    def __new__(cls: Type[type], name: str, bases: Tuple[type, ...], attrs: Dict[str, Any], **kwargs: Any) -> _MenuMeta:
+    def __new__(cls: Type[_MenuMeta], name: str, bases: Tuple[type, ...], attrs: Dict[str, Any], **kwargs: Any) -> _MenuMeta:
         buttons = []
 
-        new_cls = cast(_MenuMeta, super().__new__(cls, name, bases, attrs))
+        new_cls = super().__new__(cls, name, bases, attrs)
 
         inherit_buttons = kwargs.pop('inherit_buttons', True)
         if inherit_buttons:
@@ -514,7 +513,7 @@ class Menu(metaclass=_MenuMeta):
                     # Remove the reaction from being processable
                     # Removing it from the cache first makes it so the check
                     # doesn't get triggered.
-                    emoji = cast(discord.PartialEmoji, emoji)
+                    assert isinstance(emoji, discord.PartialEmoji)
                     self.buttons.pop(emoji, None)
                     await self.message.remove_reaction(emoji, self.__me)
 
@@ -772,9 +771,11 @@ class Menu(metaclass=_MenuMeta):
         self.bot = bot = ctx.bot
         self.ctx = ctx
         self._author_id = ctx.author.id
-        channel = cast(discord.abc.Messageable, channel or ctx.channel)
-        if isinstance(channel, discord.abc.GuildChannel):  # type: ignore
-            me = channel.guild.me
+        channel = channel or ctx.channel
+        if TYPE_CHECKING:
+            assert isinstance(channel, discord.abc.Messageable)
+        if hasattr(channel, 'guild'):
+            me = channel.guild.me  # type: ignore
         else:
             me = ctx.bot.user
         permissions = channel.permissions_for(me)  # type: ignore
