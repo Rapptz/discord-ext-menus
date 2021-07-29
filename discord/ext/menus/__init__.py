@@ -259,9 +259,11 @@ class _MenuMeta(type):
         new_cls = super().__new__(cls, name, bases, attrs)
 
         inherit_buttons = kwargs.pop('inherit_buttons', True)
+        new_cls.__inherit_buttons__ = inherit_buttons
+
         if inherit_buttons:
             # walk MRO to get all buttons even in subclasses
-            for base in reversed(new_cls.__mro__):
+            for base in new_cls.__mro__:
                 for elem, value in base.__dict__.items():
                     try:
                         value.__menu_button__
@@ -269,6 +271,12 @@ class _MenuMeta(type):
                         continue
                     else:
                         buttons.append(value)
+
+                # We check if parent classes should also inherit buttons
+                # If they don't, then we stop the loop.
+                should_inherit = getattr(base, '__inherit_buttons__', True)
+                if not should_inherit:
+                    break
         else:
             for elem, value in attrs.items():
                 try:
