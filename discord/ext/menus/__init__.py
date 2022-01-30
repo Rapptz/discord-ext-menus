@@ -24,15 +24,49 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+from __future__ import annotations
+
 import asyncio
+from typing import (
+    Any,
+    AsyncIterable,
+    AsyncIterator,
+    Callable,
+    Coroutine,
+    Dict,
+    Generic,
+    NoReturn,
+    List,
+    Optional,
+    Pattern,
+    Sequence,
+    Tuple,
+    TYPE_CHECKING,
+    Type,
+    TypeVar,
+    Union,
+)
 import discord
 
 import itertools
 import inspect
-import bisect
 import logging
 import re
-from collections import OrderedDict, namedtuple
+
+if TYPE_CHECKING:
+    from discord.ext import commands
+
+    from _typeshed import SupportsDunderLT
+
+
+T = TypeVar('T')
+KT = TypeVar('KT', bound='SupportsDunderLT')
+IT = TypeVar('IT')
+MT = TypeVar('MT', bound='Menu')
+
+_Coro = Coroutine[Any, Any, T]
+_BtnFunc = Callable[[MT, discord.RawReactionActionEvent], _Coro[T]]
+_MbyCoro = Union[None, _Coro[Union[Any, NoReturn]]]
 
 # Needed for the setup.py script
 __version__ = '1.0.0-a'
@@ -40,72 +74,84 @@ __version__ = '1.0.0-a'
 # consistency with the `discord` namespaced logging
 log = logging.getLogger(__name__)
 
+
 class MenuError(Exception):
     pass
 
+
 class CannotEmbedLinks(MenuError):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__('Bot does not have embed links permission in this channel.')
 
+
 class CannotSendMessages(MenuError):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__('Bot cannot send messages in this channel.')
 
+
 class CannotAddReactions(MenuError):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__('Bot cannot add reactions in this channel.')
 
+
 class CannotReadMessageHistory(MenuError):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__('Bot does not have Read Message History permissions in this channel.')
+
 
 class Position:
     __slots__ = ('number', 'bucket')
 
-    def __init__(self, number, *, bucket=1):
+    def __init__(self, number: int, *, bucket: int = 1) -> None:
         self.bucket = bucket
         self.number = number
 
-    def __lt__(self, other):
+    def __lt__(self, other: Any) -> bool:
         if not isinstance(other, Position) or not isinstance(self, Position):
             return NotImplemented
 
         return (self.bucket, self.number) < (other.bucket, other.number)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return isinstance(other, Position) and other.bucket == self.bucket and other.number == self.number
 
-    def __le__(self, other):
+    def __le__(self, other: Any) -> bool:
         r = Position.__lt__(other, self)
         if r is NotImplemented:
             return NotImplemented
         return not r
 
-    def __gt__(self, other):
+    def __gt__(self, other: Any) -> bool:
         return Position.__lt__(other, self)
 
-    def __ge__(self, other):
+    def __ge__(self, other: Any) -> bool:
         r = Position.__lt__(self, other)
         if r is NotImplemented:
             return NotImplemented
         return not r
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<{0.__class__.__name__}: {0.number}>'.format(self)
+
 
 class Last(Position):
     __slots__ = ()
-    def __init__(self, number=0):
+
+    def __init__(self, number: int = 0) -> None:
         super().__init__(number, bucket=2)
+
 
 class First(Position):
     __slots__ = ()
-    def __init__(self, number=0):
+
+    def __init__(self, number: int = 0) -> None:
         super().__init__(number, bucket=0)
 
-_custom_emoji = re.compile(r'<?(?P<animated>a)?:?(?P<name>[A-Za-z0-9\_]+):(?P<id>[0-9]{13,20})>?')
 
-def _cast_emoji(obj, *, _custom_emoji=_custom_emoji):
+_custom_emoji: Pattern[str] = re.compile(r'<?(?P<animated>a)?:?(?P<name>[A-Za-z0-9\_]+):(?P<id>[0-9]{13,20})>?')
+
+
+def _cast_emoji(obj: Any, *, _custom_emoji: Pattern[str] = _custom_emoji) -> discord.PartialEmoji:
     if isinstance(obj, discord.PartialEmoji):
         return obj
 
@@ -119,7 +165,8 @@ def _cast_emoji(obj, *, _custom_emoji=_custom_emoji):
         return discord.PartialEmoji(name=name, animated=animated, id=emoji_id)
     return discord.PartialEmoji(name=obj, id=None, animated=False)
 
-class Button:
+
+class Button(Generic[MT, T]):
     """Represents a reaction-style button for the :class:`Menu`.
 
     There are two ways to create this, the first being through explicitly
@@ -149,9 +196,18 @@ class Button:
         Whether the button should lock all other buttons from being processed
         until this button is done. Defaults to ``True``.
     """
+
     __slots__ = ('emoji', '_action', '_skip_if', 'position', 'lock')
 
-    def __init__(self, emoji, action, *, skip_if=None, position=None, lock=True):
+    def __init__(
+        self,
+        emoji: discord.PartialEmoji,
+        action: _BtnFunc[MT, T],
+        *,
+        skip_if: Optional[Callable[[MT], bool]] = None,
+        position: Optional[Position] = None,
+        lock: bool = True
+    ):
         self.emoji = _cast_emoji(emoji)
         self.action = action
         self.skip_if = skip_if
@@ -159,11 +215,11 @@ class Button:
         self.lock = lock
 
     @property
-    def skip_if(self):
+    def skip_if(self) -> Callable[[MT], bool]:
         return self._skip_if
 
     @skip_if.setter
-    def skip_if(self, value):
+    def skip_if(self, value: Optional[Callable[[MT], bool]]) -> None:  # type: ignore
         if value is None:
             self._skip_if = lambda x: False
             return
@@ -180,11 +236,11 @@ class Button:
             self._skip_if = value.__func__
 
     @property
-    def action(self):
+    def action(self) -> _BtnFunc[MT, T]:
         return self._action
 
     @action.setter
-    def action(self, value):
+    def action(self, value: _BtnFunc[MT, T]) -> None:
         try:
             menu_self = value.__self__
         except AttributeError:
@@ -201,18 +257,21 @@ class Button:
 
         self._action = value
 
-    def __call__(self, menu, payload):
+    def __call__(self, menu: MT, payload: discord.RawReactionActionEvent) -> _Coro[Optional[T]]:
         if self.skip_if(menu):
-            return
+            async def _sleep():
+                await asyncio.sleep(0)  
+            return _sleep()  # asyncio.sleep is a future.
         return self._action(menu, payload)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.emoji)
 
-    def is_valid(self, menu):
+    def is_valid(self, menu) -> bool:
         return not self.skip_if(menu)
 
-def button(emoji, **kwargs):
+
+def button(emoji: Union[str, discord.PartialEmoji], **kwargs: Any) -> Callable[[_BtnFunc[MT, T]], _BtnFunc[MT, T]]:
     """Denotes a method to be button for the :class:`Menu`.
 
     The methods being wrapped must have both a ``self`` and a ``payload``
@@ -242,20 +301,22 @@ def button(emoji, **kwargs):
     emoji: Union[:class:`str`, :class:`discord.PartialEmoji`]
         The emoji to use for the button.
     """
+
     def decorator(func):
         func.__menu_button__ = _cast_emoji(emoji)
         func.__menu_button_kwargs__ = kwargs
         return func
+
     return decorator
 
-class _MenuMeta(type):
-    @classmethod
-    def __prepare__(cls, name, bases, **kwargs):
-        # This is needed to maintain member order for the buttons
-        return OrderedDict()
 
-    def __new__(cls, name, bases, attrs, **kwargs):
+class _MenuMeta(type):
+    if TYPE_CHECKING:
+        __menu_buttons__: List[_BtnFunc[Any, Any]]
+
+    def __new__(cls: Type[_MenuMeta], name: str, bases: Tuple[type, ...], attrs: Dict[str, Any], **kwargs: Any) -> _MenuMeta:
         buttons = []
+
         new_cls = super().__new__(cls, name, bases, attrs)
 
         inherit_buttons = kwargs.pop('inherit_buttons', True)
@@ -279,14 +340,16 @@ class _MenuMeta(type):
                     buttons.append(value)
 
         new_cls.__menu_buttons__ = buttons
+
         return new_cls
 
-    def get_buttons(cls):
-        buttons = OrderedDict()
+    def get_buttons(cls) -> Dict[discord.PartialEmoji, Button]:
+        buttons = {}
         for func in cls.__menu_buttons__:
             emoji = func.__menu_button__
             buttons[emoji] = Button(emoji, func, **func.__menu_button_kwargs__)
         return buttons
+
 
 class Menu(metaclass=_MenuMeta):
     r"""An interface that allows handling menus by using reactions as buttons.
@@ -320,8 +383,16 @@ class Menu(metaclass=_MenuMeta):
         calling :meth:`send_initial_message`\, if for example you have a pre-existing
         message you want to attach a menu to.
     """
-    def __init__(self, *, timeout=180.0, delete_message_after=False,
-                          clear_reactions_after=False, check_embeds=False, message=None):
+
+    def __init__(
+        self,
+        *,
+        timeout: float = 180.0,
+        delete_message_after: bool = False,
+        clear_reactions_after: bool = False,
+        check_embeds: bool = False,
+        message: Optional[discord.Message] = None
+    ) -> None:
 
         self.timeout = timeout
         self.delete_message_after = delete_message_after
@@ -331,32 +402,28 @@ class Menu(metaclass=_MenuMeta):
         self.__tasks = []
         self._running = True
         self.message = message
-        self.ctx = None
-        self.bot = None
+        self.ctx: Optional[commands.Context] = None
+        self.bot: Optional[commands.Bot] = None
         self._author_id = None
         self._buttons = self.__class__.get_buttons()
         self._lock = asyncio.Lock()
         self._event = asyncio.Event()
 
     @discord.utils.cached_property
-    def buttons(self):
+    def buttons(self) -> Dict[discord.PartialEmoji, Button]:
         """Retrieves the buttons that are to be used for this menu session.
 
         Skipped buttons are not in the resulting dictionary.
 
         Returns
         ---------
-        Mapping[:class:`str`, :class:`Button`]
+        Mapping[:class:`discord.PartialEmoji`, :class:`Button`]
             A mapping of button emoji to the actual button class.
         """
         buttons = sorted(self._buttons.values(), key=lambda b: b.position)
-        return {
-            button.emoji: button
-            for button in buttons
-            if button.is_valid(self)
-        }
+        return {button.emoji: button for button in buttons if button.is_valid(self)}
 
-    def add_button(self, button, *, react=False):
+    def add_button(self, button: Button, *, react: bool = False) -> _MbyCoro:
         """|maybecoro|
 
         Adds a button to the list of buttons.
@@ -395,7 +462,10 @@ class Menu(metaclass=_MenuMeta):
 
         if react:
             if self.__tasks:
+
                 async def wrapped():
+                    assert self.message is not None
+
                     # Add the reaction
                     try:
                         await self.message.add_reaction(button.emoji)
@@ -409,9 +479,10 @@ class Menu(metaclass=_MenuMeta):
 
             async def dummy():
                 raise MenuError('Menu has not been started yet')
+
             return dummy()
 
-    def remove_button(self, emoji, *, react=False):
+    def remove_button(self, emoji: Union[Button, discord.PartialEmoji, str], *, react: bool = False) -> _MbyCoro:
         """|maybecoro|
 
         Removes a button from the list of buttons.
@@ -420,7 +491,7 @@ class Menu(metaclass=_MenuMeta):
 
         Parameters
         ------------
-        emoji: Union[:class:`Button`, :class:`str`]
+        emoji: Union[:class:`Button`, :class:`discord.PartialEmoji`, :class:`str`]
             The emoji or the button to remove.
         react: :class:`bool`
             Whether to remove the reaction if the menu has been started.
@@ -443,19 +514,25 @@ class Menu(metaclass=_MenuMeta):
 
         if react:
             if self.__tasks:
+
                 async def wrapped():
+                    assert self.message is not None
+
                     # Remove the reaction from being processable
                     # Removing it from the cache first makes it so the check
                     # doesn't get triggered.
+                    assert isinstance(emoji, discord.PartialEmoji)
                     self.buttons.pop(emoji, None)
                     await self.message.remove_reaction(emoji, self.__me)
+
                 return wrapped()
 
             async def dummy():
                 raise MenuError('Menu has not been started yet')
+
             return dummy()
 
-    def clear_buttons(self, *, react=False):
+    def clear_buttons(self, *, react: bool = False) -> _MbyCoro:
         """|maybecoro|
 
         Removes all buttons from the list of buttons.
@@ -483,7 +560,10 @@ class Menu(metaclass=_MenuMeta):
 
         if react:
             if self.__tasks:
+
                 async def wrapped():
+                    assert self.message is not None
+
                     # A fast path if we have permissions
                     if self._can_remove_reactions:
                         try:
@@ -505,15 +585,17 @@ class Menu(metaclass=_MenuMeta):
                         await self.message.remove_reaction(reaction, self.__me)
 
                 return wrapped()
+
             async def dummy():
                 raise MenuError('Menu has not been started yet')
+
             return dummy()
 
-    def should_add_reactions(self):
+    def should_add_reactions(self) -> bool:
         """:class:`bool`: Whether to add reactions to this menu session."""
-        return len(self.buttons)
+        return len(self.buttons) > 0
 
-    def _verify_permissions(self, ctx, channel, permissions):
+    def _verify_permissions(self, ctx: commands.Context, channel: discord.abc.Messageable, permissions: discord.Permissions):
         if not permissions.send_messages:
             raise CannotSendMessages()
 
@@ -527,7 +609,7 @@ class Menu(metaclass=_MenuMeta):
             if not permissions.read_message_history:
                 raise CannotReadMessageHistory()
 
-    def reaction_check(self, payload):
+    def reaction_check(self, payload: discord.RawReactionActionEvent) -> bool:
         """The function that is used to check whether the payload should be processed.
         This is passed to :meth:`discord.ext.commands.Bot.wait_for <Bot.wait_for>`.
 
@@ -543,23 +625,27 @@ class Menu(metaclass=_MenuMeta):
         :class:`bool`
             Whether the payload should be processed.
         """
-        if payload.message_id != self.message.id:
+        if self.message is None or payload.message_id != self.message.id:
             return False
-        if payload.user_id not in {self.bot.owner_id, self._author_id, *self.bot.owner_ids}:
+        if self.bot is None or payload.user_id not in {self.bot.owner_id, self._author_id, *self.bot.owner_ids}:
             return False
 
         return payload.emoji in self.buttons
 
-    async def _internal_loop(self):
+    async def _internal_loop(self) -> Optional[_MbyCoro]:
+        assert self.bot is not None
+        assert self.message is not None
+
+        self.__timed_out = False
+        loop = self.bot.loop
+        # Ensure the name exists for the cancellation handling
+        tasks = []
+
         try:
-            self.__timed_out = False
-            loop = self.bot.loop
-            # Ensure the name exists for the cancellation handling
-            tasks = []
             while self._running:
                 tasks = [
                     asyncio.ensure_future(self.bot.wait_for('raw_reaction_add', check=self.reaction_check)),
-                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check))
+                    asyncio.ensure_future(self.bot.wait_for('raw_reaction_remove', check=self.reaction_check)),
                 ]
                 done, pending = await asyncio.wait(tasks, timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED)
                 for task in pending:
@@ -621,7 +707,7 @@ class Menu(metaclass=_MenuMeta):
             except Exception:
                 pass
 
-    async def update(self, payload):
+    async def update(self, payload: discord.RawReactionActionEvent) -> None:
         """|coro|
 
         Updates the menu after an event has been received.
@@ -639,13 +725,13 @@ class Menu(metaclass=_MenuMeta):
             if button.lock:
                 async with self._lock:
                     if self._running:
-                        await button(self, payload)
+                        await button(self, payload)  
             else:
                 await button(self, payload)
         except Exception as exc:
             await self.on_menu_button_error(exc)
 
-    async def on_menu_button_error(self, exc):
+    async def on_menu_button_error(self, exc: Exception) -> Any:
         """|coro|
 
         Handles reporting of errors while updating the menu from events.
@@ -662,7 +748,9 @@ class Menu(metaclass=_MenuMeta):
         # which would require awaiting, such as stopping an erroring menu.
         log.exception("Unhandled exception during menu update.", exc_info=exc)
 
-    async def start(self, ctx, *, channel=None, wait=False):
+    async def start(
+        self, ctx: commands.Context, *, channel: Optional[discord.abc.Messageable] = None, wait: bool = False
+    ) -> Any:
         """|coro|
 
         Starts the interactive menu session.
@@ -685,6 +773,7 @@ class Menu(metaclass=_MenuMeta):
         discord.HTTPException
             Adding a reaction failed.
         """
+        assert ctx.bot is not None
 
         # Clear the buttons cache and re-compute if possible.
         try:
@@ -696,8 +785,8 @@ class Menu(metaclass=_MenuMeta):
         self.ctx = ctx
         self._author_id = ctx.author.id
         channel = channel or ctx.channel
-        me = channel.guild.me if hasattr(channel, 'guild') else ctx.bot.user
-        permissions = channel.permissions_for(me)
+        me = channel.guild.me if hasattr(channel, 'guild') else ctx.bot.user  # type: ignore
+        permissions = channel.permissions_for(me)  # type: ignore
         self.__me = discord.Object(id=me.id)
         self._verify_permissions(ctx, channel, permissions)
         self._event.clear()
@@ -715,20 +804,23 @@ class Menu(metaclass=_MenuMeta):
             self.__tasks.append(bot.loop.create_task(self._internal_loop()))
 
             async def add_reactions_task():
+                assert msg is not None
+
                 for emoji in self.buttons:
                     await msg.add_reaction(emoji)
+
             self.__tasks.append(bot.loop.create_task(add_reactions_task()))
 
             if wait:
                 await self._event.wait()
 
-    async def finalize(self, timed_out):
+    async def finalize(self, timed_out: bool) -> Any:
         """|coro|
 
         A coroutine that is called when the menu loop has completed
         its run. This is useful if some asynchronous clean-up is
         required after the fact.
-        
+
         Parameters
         --------------
         timed_out: :class:`bool`
@@ -736,7 +828,7 @@ class Menu(metaclass=_MenuMeta):
         """
         return
 
-    async def send_initial_message(self, ctx, channel):
+    async def send_initial_message(self, ctx: commands.Context, channel: discord.abc.Messageable) -> discord.Message:
         """|coro|
 
         Sends the initial message for the menu session.
@@ -761,14 +853,15 @@ class Menu(metaclass=_MenuMeta):
         """
         raise NotImplementedError
 
-    def stop(self):
+    def stop(self) -> None:
         """Stops the internal loop."""
         self._running = False
         for task in self.__tasks:
             task.cancel()
         self.__tasks.clear()
 
-class PageSource:
+
+class PageSource(Generic[T]):
     """An interface representing a menu page's data source for the actual menu page.
 
     Subclasses must implement the backing resource along with the following methods:
@@ -777,7 +870,8 @@ class PageSource:
     - :meth:`is_paginating`
     - :meth:`format_page`
     """
-    async def _prepare_once(self):
+
+    async def _prepare_once(self) -> None:
         try:
             # Don't feel like formatting hasattr with
             # the proper mangling
@@ -789,7 +883,7 @@ class PageSource:
             await self.prepare()
             self.__prepare = True
 
-    async def prepare(self):
+    async def prepare(self) -> None:
         """|coro|
 
         A coroutine that is called after initialisation
@@ -802,7 +896,7 @@ class PageSource:
         """
         return
 
-    def is_paginating(self):
+    def is_paginating(self) -> bool:
         """An abstract method that notifies the :class:`MenuPages` whether or not
         to start paginating. This signals whether to add reactions or not.
 
@@ -815,7 +909,7 @@ class PageSource:
         """
         raise NotImplementedError
 
-    def get_max_pages(self):
+    def get_max_pages(self) -> Optional[int]:
         """An optional abstract method that retrieves the maximum number of pages
         this page source has. Useful for UX purposes.
 
@@ -829,7 +923,7 @@ class PageSource:
         """
         return None
 
-    async def get_page(self, page_number):
+    async def get_page(self, page_number: int) -> T:
         """|coro|
 
         An abstract method that retrieves an object representing the object to format.
@@ -854,7 +948,7 @@ class PageSource:
         """
         raise NotImplementedError
 
-    async def format_page(self, menu, page):
+    async def format_page(self, menu: Menu, page: T) -> Union[str, discord.Embed, Dict[str, Any]]:
         """|maybecoro|
 
         An abstract method to format the page.
@@ -888,7 +982,8 @@ class PageSource:
         """
         raise NotImplementedError
 
-class MenuPages(Menu):
+
+class MenuPages(Menu, Generic[T]):
     """A special type of Menu dedicated to pagination.
 
     Attributes
@@ -897,17 +992,18 @@ class MenuPages(Menu):
         The current page that we are in. Zero-indexed
         between [0, :attr:`PageSource.max_pages`).
     """
-    def __init__(self, source, **kwargs):
+
+    def __init__(self, source: PageSource[T], **kwargs: Any) -> None:
         self._source = source
-        self.current_page = 0
+        self.current_page: int = 0
         super().__init__(**kwargs)
 
     @property
-    def source(self):
+    def source(self) -> PageSource[T]:
         """:class:`PageSource`: The source where the data comes from."""
         return self._source
 
-    async def change_source(self, source):
+    async def change_source(self, source: PageSource[T]) -> None:
         """|coro|
 
         Changes the :class:`PageSource` to a different one at runtime.
@@ -931,25 +1027,28 @@ class MenuPages(Menu):
             await source._prepare_once()
             await self.show_page(0)
 
-    def should_add_reactions(self):
+    def should_add_reactions(self) -> bool:
         return self._source.is_paginating()
 
-    async def _get_kwargs_from_page(self, page):
+    async def _get_kwargs_from_page(self, page: T) -> Dict[str, Any]:
         value = await discord.utils.maybe_coroutine(self._source.format_page, self, page)
         if isinstance(value, dict):
             return value
         elif isinstance(value, str):
-            return { 'content': value, 'embed': None }
+            return {'content': value, 'embed': None}
         elif isinstance(value, discord.Embed):
-            return { 'embed': value, 'content': None }
+            return {'embed': value, 'content': None}
+        return {}  # this should never happen
 
-    async def show_page(self, page_number):
+    async def show_page(self, page_number: int) -> None:
+        assert self.message is not None
+
         page = await self._source.get_page(page_number)
         self.current_page = page_number
         kwargs = await self._get_kwargs_from_page(page)
         await self.message.edit(**kwargs)
 
-    async def send_initial_message(self, ctx, channel):
+    async def send_initial_message(self, ctx: commands.Context, channel: discord.abc.Messageable) -> None:
         """|coro|
 
         The default implementation of :meth:`Menu.send_initial_message`
@@ -959,13 +1058,13 @@ class MenuPages(Menu):
         """
         page = await self._source.get_page(0)
         kwargs = await self._get_kwargs_from_page(page)
-        return await channel.send(**kwargs)
+        return await channel.send(**kwargs)  # type: ignore
 
-    async def start(self, ctx, *, channel=None, wait=False):
+    async def start(self, ctx, *, channel: Optional[discord.abc.Messageable] = None, wait: bool = False) -> None:
         await self._source._prepare_once()
         await super().start(ctx, channel=channel, wait=wait)
 
-    async def show_checked_page(self, page_number):
+    async def show_checked_page(self, page_number: int) -> None:
         max_pages = self._source.get_max_pages()
         try:
             if max_pages is None:
@@ -977,45 +1076,52 @@ class MenuPages(Menu):
             # An error happened that can be handled, so ignore it.
             pass
 
-    async def show_current_page(self):
+    async def show_current_page(self) -> None:
         if self._source.is_paginating():
             await self.show_page(self.current_page)
 
-    def _skip_double_triangle_buttons(self):
+    def _skip_double_triangle_buttons(self) -> bool:
         max_pages = self._source.get_max_pages()
         if max_pages is None:
             return True
         return max_pages <= 2
 
-    @button('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
-            position=First(0), skip_if=_skip_double_triangle_buttons)
-    async def go_to_first_page(self, payload):
+    @button(
+        '\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
+        position=First(0),
+        skip_if=_skip_double_triangle_buttons,
+    )
+    async def go_to_first_page(self, payload: discord.RawReactionActionEvent) -> None:
         """go to the first page"""
         await self.show_page(0)
 
     @button('\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f', position=First(1))
-    async def go_to_previous_page(self, payload):
+    async def go_to_previous_page(self, payload: discord.RawReactionActionEvent) -> None:
         """go to the previous page"""
         await self.show_checked_page(self.current_page - 1)
 
     @button('\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f', position=Last(0))
-    async def go_to_next_page(self, payload):
+    async def go_to_next_page(self, payload: discord.RawReactionActionEvent) -> None:
         """go to the next page"""
         await self.show_checked_page(self.current_page + 1)
 
-    @button('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
-            position=Last(1), skip_if=_skip_double_triangle_buttons)
-    async def go_to_last_page(self, payload):
+    @button(
+        '\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f',
+        position=Last(1),
+        skip_if=_skip_double_triangle_buttons,
+    )
+    async def go_to_last_page(self, payload: discord.RawReactionActionEvent) -> None:
         """go to the last page"""
         # The call here is safe because it's guarded by skip_if
-        await self.show_page(self._source.get_max_pages() - 1)
+        await self.show_page(self._source.get_max_pages() - 1)  # type: ignore
 
     @button('\N{BLACK SQUARE FOR STOP}\ufe0f', position=Last(2))
-    async def stop_pages(self, payload):
+    async def stop_pages(self, payload: discord.RawReactionActionEvent) -> None:
         """stops the pagination session."""
         self.stop()
 
-class ListPageSource(PageSource):
+
+class ListPageSource(PageSource[T]):
     """A data source for a sequence of items.
 
     This page source does not handle any sort of formatting, leaving it up
@@ -1029,7 +1135,7 @@ class ListPageSource(PageSource):
         How many elements are in a page.
     """
 
-    def __init__(self, entries, *, per_page):
+    def __init__(self, entries: Sequence[T], *, per_page: int) -> None:
         self.entries = entries
         self.per_page = per_page
 
@@ -1039,15 +1145,15 @@ class ListPageSource(PageSource):
 
         self._max_pages = pages
 
-    def is_paginating(self):
+    def is_paginating(self) -> bool:
         """:class:`bool`: Whether pagination is required."""
         return len(self.entries) > self.per_page
 
-    def get_max_pages(self):
+    def get_max_pages(self) -> int:
         """:class:`int`: The maximum number of pages required to paginate this sequence."""
         return self._max_pages
 
-    async def get_page(self, page_number):
+    async def get_page(self, page_number: int) -> Union[T, Sequence[T]]:
         """Returns either a single element of the sequence or
         a slice of the sequence.
 
@@ -1061,13 +1167,23 @@ class ListPageSource(PageSource):
         """
         if self.per_page == 1:
             return self.entries[page_number]
-        else:
-            base = page_number * self.per_page
-            return self.entries[base:base + self.per_page]
+        base = page_number * self.per_page
+        return self.entries[base : base + self.per_page]
 
-_GroupByEntry = namedtuple('_GroupByEntry', 'key items')
 
-class GroupByPageSource(ListPageSource):
+class GroupByEntry(Tuple[KT, List[IT]]):
+    if TYPE_CHECKING:
+        key: KT
+        items: List[IT]
+
+    def __new__(cls: Type[GroupByEntry[KT, IT]], key: KT, items: List[IT]) -> GroupByEntry[KT, IT]:
+        new_cls = super().__new__(cls, (key, items))
+        new_cls.key = key
+        new_cls.items = items
+        return new_cls
+
+
+class GroupByPageSource(ListPageSource[IT], Generic[KT, IT]):
     """A data source for grouped by sequence of items.
 
     This inherits from :class:`ListPageSource`.
@@ -1087,7 +1203,8 @@ class GroupByPageSource(ListPageSource):
     per_page: :class:`int`
         How many elements to have per page of the group.
     """
-    def __init__(self, entries, *, key, per_page, sort=True):
+
+    def __init__(self, entries: Sequence[IT], *, key: Callable[[IT], KT], per_page: int, sort: bool = True) -> None:
         self.__entries = entries if not sort else sorted(entries, key=key)
         nested = []
         self.nested_per_page = per_page
@@ -1098,14 +1215,14 @@ class GroupByPageSource(ListPageSource):
             size = len(g)
 
             # Chunk the nested pages
-            nested.extend(_GroupByEntry(key=k, items=g[i:i+per_page]) for i in range(0, size, per_page))
+            nested.extend(GroupByEntry(key=k, items=g[i : i + per_page]) for i in range(0, size, per_page))
 
         super().__init__(nested, per_page=1)
 
-    async def get_page(self, page_number):
+    async def get_page(self, page_number: int) -> IT:
         return self.entries[page_number]
 
-    async def format_page(self, menu, entry):
+    async def format_page(self, menu: Menu, entry: GroupByEntry[KT, IT]) -> Dict[str, Any]:
         """An abstract method to format the page.
 
         This works similar to the :meth:`ListPageSource.format_page` except
@@ -1128,7 +1245,12 @@ class GroupByPageSource(ListPageSource):
         """
         raise NotImplementedError
 
-def _aiter(obj, *, _isasync=inspect.iscoroutinefunction):
+
+def _aiter(
+    obj: AsyncIterable[T],
+    *,
+    _isasync: Callable[[Any], bool] = inspect.iscoroutinefunction
+) -> AsyncIterator[T]:
     cls = obj.__class__
     try:
         async_iter = cls.__aiter__
@@ -1140,7 +1262,8 @@ def _aiter(obj, *, _isasync=inspect.iscoroutinefunction):
         raise TypeError('{0.__name__!r} object is not an async iterable'.format(cls))
     return async_iter
 
-class AsyncIteratorPageSource(PageSource):
+
+class AsyncIteratorPageSource(PageSource[T]):
     """A data source for data backed by an asynchronous iterator.
 
     This page source does not handle any sort of formatting, leaving it up
@@ -1154,16 +1277,16 @@ class AsyncIteratorPageSource(PageSource):
         How many elements to have per page.
     """
 
-    def __init__(self, iterator, *, per_page):
+    def __init__(self, iterator: AsyncIterator[T], *, per_page: int) -> None:
         self.iterator = _aiter(iterator)
         self.per_page = per_page
         self._exhausted = False
         self._cache = []
 
-    async def _iterate(self, n):
+    async def _iterate(self, n: int) -> None:
         it = self.iterator
         cache = self._cache
-        for i in range(0, n):
+        for _ in range(n):
             try:
                 elem = await it.__anext__()
             except StopAsyncIteration:
@@ -1172,15 +1295,15 @@ class AsyncIteratorPageSource(PageSource):
             else:
                 cache.append(elem)
 
-    async def prepare(self, *, _aiter=_aiter):
+    async def prepare(self, *, _aiter: Callable[..., AsyncIterator[Any]] = _aiter) -> None:
         # Iterate until we have at least a bit more single page
         await self._iterate(self.per_page + 1)
 
-    def is_paginating(self):
+    def is_paginating(self) -> bool:
         """:class:`bool`: Whether pagination is required."""
         return len(self._cache) > self.per_page
 
-    async def _get_single_page(self, page_number):
+    async def _get_single_page(self, page_number: int) -> T:
         if page_number < 0:
             raise IndexError('Negative page number.')
 
@@ -1188,7 +1311,7 @@ class AsyncIteratorPageSource(PageSource):
             await self._iterate((page_number + 1) - len(self._cache))
         return self._cache[page_number]
 
-    async def _get_page_range(self, page_number):
+    async def _get_page_range(self, page_number: int) -> Sequence[T]:
         if page_number < 0:
             raise IndexError('Negative page number.')
 
@@ -1202,7 +1325,7 @@ class AsyncIteratorPageSource(PageSource):
             raise IndexError('Went too far')
         return entries
 
-    async def get_page(self, page_number):
+    async def get_page(self, page_number) -> Union[T, Sequence[T]]:
         """Returns either a single element of the sequence or
         a slice of the sequence.
 
