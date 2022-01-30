@@ -56,11 +56,11 @@ import re
 if TYPE_CHECKING:
     from discord.ext import commands
 
-    from _typeshed import SupportsLessThan
+    from _typeshed import SupportsDunderLT
 
 
 T = TypeVar('T')
-KT = TypeVar('KT', bound='SupportsLessThan')
+KT = TypeVar('KT', bound='SupportsDunderLT')
 IT = TypeVar('IT')
 MT = TypeVar('MT', bound='Menu')
 
@@ -785,11 +785,7 @@ class Menu(metaclass=_MenuMeta):
         self.ctx = ctx
         self._author_id = ctx.author.id
         channel = channel or ctx.channel
-        assert isinstance(channel, discord.abc.Messageable)
-        if hasattr(channel, 'guild'):
-            me = channel.guild.me  # type: ignore
-        else:
-            me = ctx.bot.user
+        me = channel.guild.me if hasattr(channel, 'guild') else ctx.bot.user  # type: ignore
         permissions = channel.permissions_for(me)  # type: ignore
         self.__me = discord.Object(id=me.id)
         self._verify_permissions(ctx, channel, permissions)
@@ -1062,7 +1058,7 @@ class MenuPages(Menu, Generic[T]):
         """
         page = await self._source.get_page(0)
         kwargs = await self._get_kwargs_from_page(page)
-        return await channel.send(**kwargs)
+        return await channel.send(**kwargs)  # type: ignore
 
     async def start(self, ctx, *, channel: Optional[discord.abc.Messageable] = None, wait: bool = False) -> None:
         await self._source._prepare_once()
