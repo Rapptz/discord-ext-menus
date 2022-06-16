@@ -963,6 +963,8 @@ class MenuPages(Menu):
 
     async def start(self, ctx, *, channel=None, wait=False):
         await self._source._prepare_once()
+        if self.message is not None:    
+            await self.show_current_page()
         await super().start(ctx, channel=channel, wait=wait)
 
     async def show_checked_page(self, page_number):
